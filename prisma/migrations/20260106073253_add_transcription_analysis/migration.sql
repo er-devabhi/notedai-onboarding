@@ -1,0 +1,32 @@
+-- CreateTable
+CREATE TABLE "transcription_analysis" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "transcription" JSONB,
+    "analysis" JSONB,
+    "analysis_usage" JSONB,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT timezone('utc'::text, now()),
+    "sop_overall_violations_or_red_flags" JSONB,
+    "sop_overall_help_or_coaching_intensity_level" TEXT,
+    "sop_overall_initially_before_coaching_level" TEXT,
+    "sop_overall_initially_before_coaching_note" TEXT,
+    "sop_overall_after_coaching_level" TEXT,
+    "sop_overall_after_coaching_note" TEXT,
+    "sop_overall_initial_communication_and_clarity_note" TEXT,
+    "sop_overall_customer_impact_initial_outcome" TEXT,
+    "sop_overall_customer_impact_initial_note" TEXT,
+    "sop_overall_logical_order_initial_status" TEXT,
+    "sop_overall_logical_order_initial_note" TEXT,
+    "sop_overall_final_communication_and_clarity_note" TEXT,
+    "sop_overall_customer_impact_final_outcome" TEXT,
+    "sop_overall_customer_impact_final_note" TEXT,
+    "sop_overall_logical_order_final_status" TEXT,
+    "sop_overall_logical_order_final_note" TEXT,
+    "sop_overall_learning_behavior_status" TEXT,
+    "sop_overall_learning_behavior_note" TEXT,
+    "sop_overall_strengths" TEXT[],
+    "sop_overall_weaknesses" TEXT[],
+    "sop_steps" JSONB,
+
+    CONSTRAINT "transcription_analysis_pkey" PRIMARY KEY ("id")
+);

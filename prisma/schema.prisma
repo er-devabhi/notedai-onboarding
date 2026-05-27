@@ -1,0 +1,875 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model users {
+  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  name                         String?                        @db.VarChar
+  email                        String?                        @unique @db.VarChar
+  password                     String?                        @db.VarChar
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurant_id                Int?
+  outlet_id                    Int?
+  updated_at                   DateTime                       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  role                         UserRole                       @default(MANAGER)
+  audio_files                  audio_files[]
+  conversation                 conversation[]
+  devices                      devices[]
+  in_patient_feedback_form     in_patient_feedback_form[]
+  notifications                notifications[]
+  post_discharge_feedback_form post_discharge_feedback_form[]
+  support_ticket               support_ticket[]
+  department_subscriptions     user_department_subscription[]
+  outlet                       outlet?                        @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  restaurants                  restaurants?                   @relation(fields: [restaurant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([id])
+}
+
+model restaurants {
+  id               Int              @id @default(autoincrement())
+  created_at       DateTime         @default(now()) @db.Timestamptz(6)
+  restaurant_name  String?          @db.VarChar
+  airtable_api_key String?          @db.VarChar
+  airtable_base_id String?          @db.VarChar
+  updated_at       DateTime         @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  organizationType OrganizationType @default(RESTAURANT)
+  outlets          outlet[]
+  users            users[]
+}
+
+model outlet {
+  id                           Int                            @id @default(autoincrement())
+  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  name                         String                         @db.VarChar
+  location                     String?                        @db.VarChar
+  restaurant_id                Int
+  updated_at                   DateTime                       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  branchCode                   String?
+  managerNames                 String[]                       @db.VarChar
+  region                       String?                        @db.VarChar
+  serverNames                  String[]                       @db.VarChar
+  departments                  String[]
+  dashboard_url                String?                        @db.VarChar
+  default_email_cc             String[]                       @db.VarChar
+  config                       Json?
+  admission                    admission[]
+  conversation                 conversation[]
+  hospital_escalation_group    hospital_escalation_group[]
+  hospital_issue_ticket        hospital_issue_ticket[]
+  hospital_patient             hospital_patient[]
+  hospital_patient_comment     hospital_patient_comment[]
+  in_patient_feedback_form     in_patient_feedback_form[]
+  restaurant                   restaurants                    @relation(fields: [restaurant_id], references: [id])
+  outlet_departments           outlet_department[]
+  patient                      patient[]
+  patient_autocomplete         patient_autocomplete[]
+  post_discharge_feedback_form post_discharge_feedback_form[]
+  staffs                       staffs[]
+  support_ticket               support_ticket[]
+  tables                       table[]
+  table_group                  table_group[]
+  users                        users[]
+}
+
+model outlet_department {
+  id                 Int                            @id @default(autoincrement())
+  outlet_id          Int
+  name               String
+  created_at         DateTime                       @default(now())
+  updated_at         DateTime                       @updatedAt
+  configs            department_config[]
+  outlet             outlet                         @relation(fields: [outlet_id], references: [id])
+  user_subscriptions user_department_subscription[]
+
+  @@unique([outlet_id, name])
+}
+
+model user_department_subscription {
+  id                   Int               @id @default(autoincrement())
+  user_id              String            @db.Uuid
+  outlet_department_id Int
+  created_at           DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime          @updatedAt @db.Timestamptz(6)
+  outlet_department    outlet_department @relation(fields: [outlet_department_id], references: [id], onDelete: Cascade)
+  user                 users             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, outlet_department_id])
+  @@index([outlet_department_id])
+}
+
+model department_config {
+  id                   Int               @id @default(autoincrement())
+  outlet_department_id Int
+  name                 String
+  email                String
+  whatsapp_number      String[]          @db.VarChar
+  type                 contact_type
+  is_active            Boolean           @default(true)
+  created_at           DateTime          @default(now())
+  updated_at           DateTime          @updatedAt
+  outlet_department    outlet_department @relation(fields: [outlet_department_id], references: [id])
+
+  @@index([outlet_department_id])
+}
+
+model table_group {
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar
+  outlet_id  Int
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  order      Int      @default(0)
+  staffs     staffs[]
+  tables     table[]
+  outlet     outlet   @relation(fields: [outlet_id], references: [id])
+
+  @@unique([outlet_id, name])
+}
+
+model table {
+  id               Int               @id @default(autoincrement())
+  table_no         String            @db.VarChar
+  outlet_id        Int
+  capacity         Int?
+  resourceId       String?           @unique
+  created_at       DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  active           Boolean           @default(true)
+  order            Int               @default(0)
+  group_id         Int?
+  conversation     conversation[]
+  qr_code_feedback qr_code_feedback?
+  group            table_group?      @relation(fields: [group_id], references: [id])
+  outlet           outlet            @relation(fields: [outlet_id], references: [id])
+
+  @@unique([table_no, outlet_id, group_id])
+}
+
+model admission {
+  id             Int              @id @default(autoincrement())
+  ip_no          String
+  doctor_name    String?
+  admission_date DateTime         @db.Timestamptz(6)
+  discharge_date DateTime?        @db.Timestamptz(6)
+  patient_id     Int
+  outlet_id      Int
+  created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime         @db.Timestamptz(6)
+  cancelled_date DateTime?        @db.Timestamptz(6)
+  outlet         outlet           @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+  patient        patient          @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  bed_allocation bed_allocation[]
+
+  @@unique([ip_no, outlet_id])
+}
+
+model audio_files {
+  created_at       DateTime      @default(now()) @db.Timestamptz(6)
+  url              String?
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id  String?       @db.Uuid
+  is_success       Boolean?      @default(false)
+  uploaded_by      String?       @db.Uuid
+  updated_at       DateTime      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  metadata         Json?
+  type             AudioFileType @default(Feedback)
+  demucs_audio_url String?
+  conversation     conversation? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  users            users?        @relation(fields: [uploaded_by], references: [id], onDelete: NoAction)
+}
+
+model bbq_branches {
+  id               Int      @id @default(autoincrement())
+  branch_name      String?
+  city_name        String?
+  address          String?
+  phone_number     String?
+  branch_alias     String?
+  branch_image_url String?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+}
+
+model bed_allocation {
+  id                   Int            @id @default(autoincrement())
+  bed_number           String
+  sanitized_bed_number String?
+  from_time            DateTime       @db.Timestamptz(6)
+  end_time             DateTime?      @db.Timestamptz(6)
+  admission_id         Int
+  created_at           DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime       @db.Timestamptz(6)
+  admission            admission      @relation(fields: [admission_id], references: [id], onDelete: Cascade)
+  conversation         conversation[]
+
+  @@index([admission_id, from_time])
+}
+
+model city_wise_urls {
+  id              Int     @id @default(autoincrement())
+  city_name       String?
+  City_Wise_URL_s String? @map("City-Wise URL's")
+}
+
+model conversation {
+  created_at                            DateTime                         @default(now()) @db.Timestamptz(6)
+  transcript                            Json?                            @db.Json
+  metadata                              Json?
+  id                                    String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                               String?                          @db.Uuid
+  is_important                          Boolean                          @default(false)
+  contextual_translate                  Json?
+  conversation_analysis                 Json?
+  is_success                            Boolean?                         @default(false)
+  retry_count                           Int?                             @default(0)
+  invoice_number                        String?
+  order_number                          String?
+  updated_at                            DateTime                         @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  outlet_id                             Int?
+  is_offline                            Boolean                          @default(false)
+  offline_created_at                    DateTime?                        @db.Timestamptz(6)
+  ambiencePlaceIssue                    String?
+  customerSentimentScore                Int?
+  exceptionalHighlights                 String?
+  foodDrinksIssue                       String?
+  guestProfiling                        String?
+  managerActions                        String?
+  managerEvaluation                     String?
+  managerName                           String?
+  managerScore                          Int?
+  meal                                  MealTime?
+  negativeFeedback                      String?
+  npsScore                              Int?
+  sales                                 String?
+  serverName                            String?
+  serviceIssue                          String?
+  summary                               String?
+  administrationServicesIssue           String?
+  billingInsuranceIssues                String?
+  medicalCareIssues                     String?
+  selectionReason                       String?
+  ambienceHighlights                    String?
+  foodHighlights                        String?
+  serviceHighlights                     String?
+  tableGroupName                        String?
+  tableName                             String?
+  new_analysis                          Json?
+  relevance_analysis                    Json?
+  relevance_tag                         String?
+  drink_issue                           String?
+  drink_mentioned                       String[]                         @db.VarChar
+  food_issue                            String?
+  food_mentioned                        String[]                         @db.VarChar
+  drink_attributes                      Json?
+  food_attributes                       Json?
+  ambience_attributes                   Json?
+  guest_profile_attributes              Json?
+  manager_actions_attributes            Json?
+  service_attributes                    Json?
+  type                                  ConversationType                 @default(Feedback)
+  corrective_actions                    String?
+  negative_status                       NegativeStatusType               @default(Pending)
+  sales_status                          SalesStatusType                  @default(Open)
+  hospital_patient_id                   Int?
+  bed_allocation_id                     Int?
+  consent_acknowledgement_justification String?
+  consent_acknowledgement_tag           String?
+  consent_compliance                    String?
+  sop_analysis                          Json?
+  table_id                              Int?
+  sop_score                             Int?
+  visit_day                             String?
+  audio_files                           audio_files[]
+  bed_allocation                        bed_allocation?                  @relation(fields: [bed_allocation_id], references: [id])
+  hospital_patient                      hospital_patient?                @relation(fields: [hospital_patient_id], references: [id])
+  outlet                                outlet?                          @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
+  table                                 table?                           @relation(fields: [table_id], references: [id])
+  users                                 users?                           @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+  hospital_exceptional_highlight        hospital_exceptional_highlight[]
+  hospital_issue_ticket                 hospital_issue_ticket[]
+  hospital_patient_comment              hospital_patient_comment[]
+  hospital_patient_request              hospital_patient_request[]
+
+  @@index([id])
+}
+
+model dashboard_page_sessions {
+  session_id   String   @db.VarChar(100)
+  page_name    String   @db.VarChar(255)
+  user_email   String   @db.VarChar(255)
+  app_name     String   @db.VarChar(255)
+  opened_at    DateTime @default(now()) @db.Timestamp(6)
+  last_seen_at DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([session_id, page_name])
+}
+
+model dashboard_sessions {
+  session_id   String   @id @db.VarChar(100)
+  user_email   String   @db.VarChar(255)
+  app_name     String   @db.VarChar(255)
+  opened_at    DateTime @default(now()) @db.Timestamp(6)
+  last_seen_at DateTime @default(now()) @db.Timestamp(6)
+}
+
+model dashboard_usage_logs {
+  id              Int      @id @default(autoincrement())
+  user_email      String   @db.VarChar(255)
+  app_name        String   @db.VarChar(255)
+  event_type      String   @db.VarChar(50)
+  session_id      String   @db.VarChar(100)
+  event_timestamp DateTime @default(now()) @db.Timestamp(6)
+}
+
+model devices {
+  id          Int          @id @default(autoincrement())
+  userId      String       @db.Uuid
+  deviceToken String       @db.VarChar
+  platform    PushPlatform
+  endpointArn String       @db.VarChar
+  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime     @db.Timestamptz(6)
+  users       users        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+}
+
+model hospital_exceptional_highlight {
+  id              Int           @id @default(autoincrement())
+  department      String
+  compliment      String
+  conversation_id String?       @db.Uuid
+  created_at      DateTime      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at      DateTime      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  conversation    conversation? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+}
+
+model hospital_issue_ticket {
+  id                           Int                           @id @default(autoincrement())
+  description                  String
+  department                   String?
+  severity                     HospitalIssueTicketSeverity
+  pwo                          String?
+  is_email_sent                Boolean?                      @default(false)
+  status                       HospitalIssueTicketStatus?    @default(Open)
+  notes                        String?
+  created_at                   DateTime                      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at                   DateTime                      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  conversation_id              String?                       @db.Uuid
+  outlet_id                    Int
+  comment                      String?
+  attribute                    String?
+  corrective_actions           String?
+  negative_status              NegativeStatusType            @default(Pending)
+  rca                          String?
+  acknowledged_at              DateTime?                     @db.Timestamptz(6)
+  resolved_at                  DateTime?                     @db.Timestamptz(6)
+  escalation_status            EscalationStatus              @default(Pending)
+  escalated_at                 DateTime?                     @db.Timestamptz(6)
+  sla_notification_level       Int                           @default(0)
+  optionalDepartments          String[]
+  is_incorrect_ticket          Boolean?                      @default(false)
+  in_patient_feedback_id       String?
+  post_discharge_feedback_id   String?
+  escalation_group_id          Int?
+  conversation                 conversation?                 @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  hospital_escalation_group    hospital_escalation_group?    @relation(fields: [escalation_group_id], references: [id])
+  in_patient_feedback_form     in_patient_feedback_form?     @relation(fields: [in_patient_feedback_id], references: [id], onDelete: Cascade)
+  outlet                       outlet                        @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+  post_discharge_feedback_form post_discharge_feedback_form? @relation(fields: [post_discharge_feedback_id], references: [id], onDelete: Cascade)
+
+  @@index([escalation_group_id])
+}
+
+model hospital_patient {
+  id                 Int            @id @default(autoincrement())
+  uhid               String
+  ip_no              String
+  doctor_name        String
+  bed_number         String
+  patient_name       String
+  patient_number     String
+  patient_age        Int
+  patient_gender     String
+  company            String
+  admission_date     DateTime
+  outlet_id          Int
+  created_at         DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at         DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  sanitized_bed_name String?
+  conversation       conversation[]
+  outlet             outlet         @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+
+  @@index([bed_number, outlet_id, admission_date])
+}
+
+model hospital_patient_comment {
+  id                   Int                           @id @default(autoincrement())
+  department           String
+  comment              String
+  type                 HospitalPatientComment
+  conversation_id      String?                       @db.Uuid
+  created_at           DateTime                      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at           DateTime                      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  outlet_id            Int?
+  status               HospitalPatientCommentStatus? @default(Open)
+  is_incorrect_comment Boolean?                      @default(false)
+  optionalDepartments  String[]
+  conversation         conversation?                 @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  outlet               outlet?                       @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+}
+
+model hospital_patient_request {
+  id              Int           @id @default(autoincrement())
+  department      String
+  request         String
+  conversation_id String?       @db.Uuid
+  created_at      DateTime      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at      DateTime      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  conversation    conversation? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+}
+
+model in_patient_feedback_form {
+  id                            String                  @id
+  patient_name                  String?
+  uhid                          String?
+  visit_date                    DateTime?
+  treating_doctor               String?
+  contact_number                String?
+  email                         String?
+  filled_by                     FeedbackFilledBy
+  created_at                    DateTime                @default(now())
+  overall_service_quality       RatingScale?
+  admission_time_efficiency     RatingScale?
+  financial_counselling         RatingScale?
+  front_office_behaviour        RatingScale?
+  doctor_visit_first24_hours    RatingScale?
+  consent_risk_explanation      RatingScale?
+  home_medication_info          RatingScale?
+  hand_hygiene_compliance       RatingScale?
+  id_band_verification          RatingScale?
+  call_bell_response            RatingScale?
+  fall_prevention_education     RatingScale?
+  pain_management               RatingScale?
+  dietician_counselling         RatingScale?
+  food_temperature_and_timing   RatingScale?
+  room_cleanliness              RatingScale?
+  staff_hand_hygiene            RatingScale?
+  response_to_needs             RatingScale?
+  discharge_medication_info     RatingScale?
+  discharge_process_time        RatingScale?
+  relief_from_ailments          RatingScale?
+  discharge_info_one_day_prior  RatingScale?
+  privacy_and_safety_compliance RatingScale?
+  security_staff_courtesy       RatingScale?
+  recommendation_score          Int?                    @db.SmallInt
+  comments                      String?
+  impressed_staff_name          String?
+  outlet_id                     Int?
+  analysis                      Json?
+  summary                       String?
+  user_id                       String?                 @db.Uuid
+  hospital_issue_ticket         hospital_issue_ticket[]
+  outlet                        outlet?                 @relation(fields: [outlet_id], references: [id])
+  users                         users?                  @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+}
+
+model notifications {
+  id           String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String                 @db.Uuid
+  title        String                 @db.VarChar
+  body         String                 @db.VarChar
+  type         NotificationType
+  entity_type  NotificationEntityType
+  entity_id    String                 @db.VarChar
+  metadata     Json?
+  is_read      Boolean                @default(false)
+  read_at      DateTime?              @db.Timestamptz(6)
+  is_delivered Boolean                @default(false)
+  delivered_at DateTime?              @db.Timestamptz(6)
+  is_deleted   Boolean                @default(false)
+  deleted_at   DateTime?              @db.Timestamptz(6)
+  created_at   DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime               @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  users        users                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([created_at])
+  @@index([entity_type, entity_id])
+  @@index([user_id])
+  @@index([user_id, is_deleted])
+  @@index([user_id, is_read])
+}
+
+model patient {
+  id                     Int         @id @default(autoincrement())
+  uhid                   String      @unique
+  name                   String
+  phone_number           String
+  attendant_phone_number String?
+  age                    Int
+  gender                 String
+  company                String?
+  outlet_id              Int
+  created_at             DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime    @db.Timestamptz(6)
+  admission              admission[]
+  outlet                 outlet      @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+}
+
+model post_discharge_feedback_form {
+  id                            String                  @id
+  patient_name                  String?
+  uhid                          String?
+  visit_date                    DateTime?
+  treating_doctor               String?
+  contact_number                String?
+  email                         String?
+  filled_by                     FeedbackFilledBy
+  created_at                    DateTime                @default(now())
+  overall_hospital_quality      RatingScale?
+  front_office_politeness       RatingScale?
+  billing_waiting_time          RatingScale?
+  front_office_query_response   RatingScale?
+  consultation_waiting_time     RatingScale?
+  time_spent_with_doctor        RatingScale?
+  treatment_information_clarity RatingScale?
+  vital_monitoring              RatingScale?
+  pain_screening_management     RatingScale?
+  fall_education_information    RatingScale?
+  sample_collection_skills      RatingScale?
+  report_timeliness             RatingScale?
+  radiology_consent_process     RatingScale?
+  medicine_availability         RatingScale?
+  medicine_education            RatingScale?
+  pharmacy_waiting_time         RatingScale?
+  food_quality                  RatingScale?
+  cleanliness_and_hygiene       RatingScale?
+  parking_facilities            RatingScale?
+  security_staff_courtesy       RatingScale?
+  recommendation_score          Int?                    @db.SmallInt
+  comments                      String?
+  impressed_staff_name          String?
+  outlet_id                     Int?
+  analysis                      Json?
+  summary                       String?
+  user_id                       String?                 @db.Uuid
+  hospital_issue_ticket         hospital_issue_ticket[]
+  outlet                        outlet?                 @relation(fields: [outlet_id], references: [id])
+  users                         users?                  @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+}
+
+model qr_code_feedback {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  table_id Int    @unique
+  table    table  @relation(fields: [table_id], references: [id], onDelete: Cascade)
+}
+
+model role_play_evaluation {
+  id                        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at                DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  redFlags                  Json
+  sopAdherenceTag           String
+  sopAdherenceNote          String
+  sopSteps                  Json
+  communicationClarityTag   String
+  communicationClarityNote  String
+  confidenceTag             String
+  confidenceNote            String
+  empathyTag                String
+  empathyNote               String
+  activeListeningTag        String
+  activeListeningNote       String
+  pressureObjectionLevel    String
+  pressureObjectionTag      String
+  pressureObjectionNote     String
+  pressureObjectionEvidence String?
+  learningBehaviorTag       String
+  learningBehaviorNote      String
+  alternatesSolutions       Json
+  strengths                 String[]
+  weaknesses                String[]
+
+  @@index([created_at])
+}
+
+model scenario {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @db.Timestamptz(6)
+  description      String?
+  scenario_prompts scenario_prompts[]
+}
+
+model scenario_prompts {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type                   PromptType
+  voice_prompt           String?
+  evaluatlion_prompt     String?
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @db.Timestamptz(6)
+  scenarioId             String?                  @db.Uuid
+  model_configuration    Json?
+  scenario               scenario?                @relation(fields: [scenarioId], references: [id])
+  transcription_analysis transcription_analysis[]
+}
+
+model staffs {
+  id          Int          @id @default(autoincrement())
+  name        String
+  outlet_id   Int
+  group_id    Int?
+  created_at  DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime     @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  department  String?
+  opd_name    String?
+  table_group table_group? @relation(fields: [group_id], references: [id])
+  outlet      outlet       @relation(fields: [outlet_id], references: [id])
+}
+
+model support_ticket {
+  id          Int          @id @default(autoincrement())
+  outletId    Int
+  userId      String       @db.Uuid
+  name        String
+  description String
+  status      TicketStatus @default(Pending)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime     @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  attachments String[]     @default([])
+  outlet      outlet       @relation(fields: [outletId], references: [id], onDelete: NoAction)
+  users       users        @relation(fields: [userId], references: [id], onDelete: NoAction)
+}
+
+model transcription_analysis {
+  id                                                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transcription                                      Json?
+  analysis                                           Json?
+  analysis_usage                                     Json?
+  created_at                                         DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at                                         DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  sop_overall_violations_or_red_flags                Json?
+  sop_overall_help_or_coaching_intensity_level       String?
+  sop_overall_initially_before_coaching_level        String?
+  sop_overall_initially_before_coaching_note         String?
+  sop_overall_after_coaching_level                   String?
+  sop_overall_after_coaching_note                    String?
+  sop_overall_initial_communication_and_clarity_note String?
+  sop_overall_customer_impact_initial_outcome        String?
+  sop_overall_customer_impact_initial_note           String?
+  sop_overall_logical_order_initial_status           String?
+  sop_overall_logical_order_initial_note             String?
+  sop_overall_final_communication_and_clarity_note   String?
+  sop_overall_customer_impact_final_outcome          String?
+  sop_overall_customer_impact_final_note             String?
+  sop_overall_logical_order_final_status             String?
+  sop_overall_logical_order_final_note               String?
+  sop_overall_learning_behavior_status               String?
+  sop_overall_learning_behavior_note                 String?
+  sop_overall_strengths                              String[]
+  sop_overall_weaknesses                             String[]
+  sop_steps                                          Json?
+  scenario_prompt_id                                 String?           @db.Uuid
+  audio_url                                          String?
+  scenario_prompts                                   scenario_prompts? @relation(fields: [scenario_prompt_id], references: [id])
+}
+
+model wrappers_fdw_stats {
+  fdw_name     String   @id
+  create_times BigInt?
+  rows_in      BigInt?
+  rows_out     BigInt?
+  bytes_in     BigInt?
+  bytes_out    BigInt?
+  metadata     Json?
+  created_at   DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at   DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+}
+
+model hospital_escalation_group {
+  title                 String?
+  description           String?
+  status                EscalationStatus        @default(Pending)
+  rca                   String?
+  capa                  String?
+  created_by            String?
+  department            String?
+  outlet_id             Int
+  acknowledged_at       DateTime?               @db.Timestamptz(6)
+  resolved_at           DateTime?               @db.Timestamptz(6)
+  escalated_at          DateTime?               @db.Timestamptz(6)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @db.Timestamptz(6)
+  id                    Int                     @id @default(autoincrement())
+  outlet                outlet                  @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+  hospital_issue_ticket hospital_issue_ticket[]
+
+  @@index([department])
+  @@index([outlet_id])
+}
+
+model patient_autocomplete {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String?
+  uhid         String?
+  phone_number String?
+  age          Int?
+  gender       String?
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  outlet_id    Int?
+  outlet       outlet?  @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
+
+  @@index([name])
+  @@index([phone_number])
+  @@index([uhid])
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  SALES_MANAGER
+  KITCHEN_MANAGER
+  STAFF
+  DISCHARGE
+  PWO
+  GRE
+  SUPERVISOR
+  SENIOR_EXECUTIVE
+  TRAINEE
+  EXECUTIVE
+  ASSISTANT
+  DEPARTMENT
+}
+
+enum OrganizationType {
+  RESTAURANT
+  HOSPITAL
+}
+
+enum contact_type {
+  TO
+  CC
+}
+
+enum AudioFileType {
+  Feedback
+  QrCodeFeedback
+}
+
+enum ConversationType {
+  Feedback
+  QrCodeFeedback
+  InPatient
+  OutPatient
+  FormFeedback
+}
+
+enum EscalationStatus {
+  Pending
+  Acknowledged
+  Resolved
+}
+
+enum FeedbackFilledBy {
+  PATIENT
+  ATTENDANT
+}
+
+enum HospitalIssueTicketSeverity {
+  Low
+  High
+  Medium
+  Suggestion
+}
+
+enum HospitalIssueTicketStatus {
+  Open
+  Overdue
+  Escalated
+  NotEscalated
+  Current
+  Closed
+}
+
+enum HospitalPatientComment {
+  Highlight
+  Request
+}
+
+enum HospitalPatientCommentStatus {
+  Open
+  Assigned
+  NotAssigned
+  Closed
+}
+
+enum MealTime {
+  Breakfast
+  Lunch
+  Snacks
+  Dinner
+  LateNight
+}
+
+enum NegativeStatusType {
+  Pending
+  Acknowledged
+  Resolved
+}
+
+enum NotificationEntityType {
+  ISSUE_TICKET
+  PATIENT_REQUEST
+  USER
+  SYSTEM
+}
+
+enum NotificationType {
+  TICKET_CREATED
+  TICKET_ESCALATED
+  TICKET_RESOLVED
+  SYSTEM_ALERT
+  ANNOUNCEMENT
+}
+
+enum PromptType {
+  Teaching
+  Testing
+  Roleplay
+  Coaching
+  Mock
+  Demo
+  RoleplayDifficult
+}
+
+enum PushPlatform {
+  ANDROID
+  IOS
+}
+
+enum RatingScale {
+  EXCELLENT
+  VERY_GOOD
+  GOOD
+  FAIR
+  POOR
+}
+
+enum SalesStatusType {
+  Open
+  InProgress
+  Closed
+}
+
+enum TicketStatus {
+  Pending
+  Resolved
+}

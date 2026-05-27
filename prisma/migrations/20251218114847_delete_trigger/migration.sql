@@ -1,0 +1,2 @@
+DROP TRIGGER IF EXISTS trg_set_escalation_timestamps
+ON hospital_issue_ticket;
