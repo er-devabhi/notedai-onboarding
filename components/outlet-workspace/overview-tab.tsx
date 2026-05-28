@@ -118,7 +118,7 @@ export function OverviewTab({ outlet }: OverviewTabProps) {
         <CardContent>
           <dl className="grid grid-cols-2 gap-4">
             <div className="rounded-lg border p-3">
-              <dt className="text-sm text-muted-foreground">Restaurant</dt>
+              <dt className="text-sm text-muted-foreground">Organization</dt>
               <dd className="font-medium">
                 {outlet.restaurant?.restaurant_name || '-'}
               </dd>
@@ -161,48 +161,89 @@ export function OverviewTab({ outlet }: OverviewTabProps) {
           <CardTitle>Outlet Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <dt className="text-sm text-muted-foreground">Manager Names</dt>
-              <dd className="font-medium">
-                {outlet.managerNames.length > 0
-                  ? outlet.managerNames.join(', ')
-                  : '-'}
-              </dd>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Manager Names */}
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-muted-foreground">Manager Names</p>
+              {outlet.managerNames.length > 0 ? (
+                <div className="max-h-32 overflow-y-auto rounded-md border">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {outlet.managerNames.map((name, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="px-3 py-1.5 font-medium">{name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="font-medium">-</p>
+              )}
             </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">Server Names</dt>
-              <dd className="font-medium">
-                {outlet.serverNames.length > 0
-                  ? outlet.serverNames.join(', ')
-                  : '-'}
-              </dd>
+
+            {/* Server Names */}
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-muted-foreground">Server Names</p>
+              {outlet.serverNames.length > 0 ? (
+                <div className="max-h-32 overflow-y-auto rounded-md border">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {outlet.serverNames.map((name, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="px-3 py-1.5 font-medium">{name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="font-medium">-</p>
+              )}
             </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">Departments</dt>
-              <dd className="font-medium">
-                {outlet.departments.length > 0
-                  ? outlet.departments.join(', ')
-                  : '-'}
-              </dd>
+
+            {/* Departments */}
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-muted-foreground">Departments</p>
+              {outlet.departments.length > 0 ? (
+                <div className="max-h-32 overflow-y-auto rounded-md border">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {outlet.departments.map((dept, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="px-3 py-1.5 font-medium">{dept}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="font-medium">-</p>
+              )}
             </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">Region</dt>
-              <dd className="font-medium">{outlet.region || '-'}</dd>
+
+            {/* Region */}
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-muted-foreground">Region</p>
+              <p className="font-medium">{outlet.region || '-'}</p>
             </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">Created</dt>
-              <dd className="font-medium">
+
+            {/* Created */}
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-muted-foreground">Created</p>
+              <p className="font-medium">
                 {new Date(outlet.created_at).toLocaleDateString()}
-              </dd>
+              </p>
             </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">Last Updated</dt>
-              <dd className="font-medium">
+
+            {/* Last Updated */}
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-muted-foreground">Last Updated</p>
+              <p className="font-medium">
                 {new Date(outlet.updated_at).toLocaleDateString()}
-              </dd>
+              </p>
             </div>
-          </dl>
+          </div>
         </CardContent>
       </Card>
     </div>

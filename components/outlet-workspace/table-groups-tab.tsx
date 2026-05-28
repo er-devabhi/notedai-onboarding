@@ -40,8 +40,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Loader2, Plus, Pencil, Trash2, GripVertical } from 'lucide-react'
+import { Loader2, Plus, Pencil, Trash2, GripVertical, ArrowUpDown, Upload } from 'lucide-react'
 import type { TableGroup } from '@/types'
+import { BulkUploadDialog } from './bulk-upload-dialog'
 
 interface TableGroupsTabProps {
   outletId: number
@@ -64,6 +65,7 @@ export function TableGroupsTab({
   const [error, setError] = useState<string | null>(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingGroup, setEditingGroup] = useState<TableGroup | null>(null)
+  const [isBulkOpen, setIsBulkOpen] = useState(false)
 
   const createForm = useForm<TableGroupInput>({
     resolver: zodResolver(tableGroupSchema),
@@ -125,6 +127,24 @@ export function TableGroupsTab({
     })
   }
 
+  const handleResetOrder = () => {
+    setError(null)
+    const sorted = [...tableGroups].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    )
+    startTransition(async () => {
+      const results = await Promise.all(
+        sorted.map((group, i) => updateTableGroup(group.id, { order: i }))
+      )
+      const failed = results.find((r) => !r.success)
+      if (failed) {
+        setError(failed.error || 'Failed to reset order')
+      } else {
+        router.refresh()
+      }
+    })
+  }
+
   const openEditDialog = (group: TableGroup) => {
     setEditingGroup(group)
     editForm.reset({ name: group.name, order: group.order })
@@ -140,7 +160,24 @@ export function TableGroupsTab({
               Organize tables into groups (e.g., floors, sections)
             </CardDescription>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsBulkOpen(true)}
+              disabled={isPending}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Bulk Upload
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleResetOrder}
+              disabled={isPending || tableGroups.length < 2}
+            >
+              <ArrowUpDown className="mr-2 h-4 w-4" />
+              Reset Order
+            </Button>
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -207,6 +244,7 @@ export function TableGroupsTab({
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -347,6 +385,13 @@ export function TableGroupsTab({
             <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
+
+        {/* Bulk Upload Dialog */}
+        <BulkUploadDialog
+          outletId={outletId}
+          open={isBulkOpen}
+          onOpenChange={setIsBulkOpen}
+        />
       </CardContent>
     </Card>
   )

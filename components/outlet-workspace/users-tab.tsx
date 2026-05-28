@@ -45,7 +45,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Plus, Pencil, UserMinus } from 'lucide-react'
+import { Loader2, Plus, Pencil, UserMinus, Eye, EyeOff } from 'lucide-react'
 import type { User } from '@/types'
 
 interface UsersTabProps {
@@ -76,6 +76,7 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
   const [error, setError] = useState<string | null>(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   const createForm = useForm<CreateUserInput>({
     resolver: zodResolver(createUserSchema),
@@ -89,15 +90,18 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
   const handleCreate = async (data: CreateUserInput) => {
     setError(null)
     startTransition(async () => {
+      console.log('Creating user:', {email: data.email, password: data.password});
+      
       const result = await createUser({
-        name: data.name,
-        email: data.email,
-        password: data.password,
+        name: data.name.trim(),
+        email: data.email.trim(),
+        password: data.password.trim(),
         role: data.role,
         outlet_id: outletId,
         restaurant_id: restaurantId,
       })
 
+      
       if (result.success) {
         setIsCreateOpen(false)
         createForm.reset()
@@ -212,12 +216,26 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
                     <Label htmlFor="create-password">
                       Password <span className="text-destructive">*</span>
                     </Label>
-                    <Input
-                      id="create-password"
-                      type="password"
-                      {...createForm.register('password')}
-                      placeholder="Minimum 6 characters"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="create-password"
+                        type={showPassword ? 'text' : 'password'}
+                        {...createForm.register('password')}
+                        placeholder="Minimum 6 characters"
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                     {createForm.formState.errors.password && (
                       <p className="text-sm text-destructive">
                         {createForm.formState.errors.password.message}

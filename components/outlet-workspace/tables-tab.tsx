@@ -1,22 +1,26 @@
-'use client'
+"use client";
 
-import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { createTable, updateTable, toggleTableActive } from '@/lib/actions/tables'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  createTable,
+  updateTable,
+  toggleTableActive,
+} from "@/lib/actions/tables";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -25,117 +29,133 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { Loader2, Plus, Pencil } from 'lucide-react'
-import type { Table, TableGroup } from '@/types'
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Plus, Pencil } from "lucide-react";
+import type { Table, TableGroup } from "@/types";
 
 interface TablesTabProps {
-  outletId: number
-  tables: Table[]
-  tableGroups: TableGroup[]
+  outletId: number;
+  tables: Table[];
+  tableGroups: TableGroup[];
 }
 
 const tableSchema = z.object({
-  table_no: z.string().min(1, 'Table number is required'),
+  table_no: z.string().min(1, "Table number is required"),
   group_id: z.string().optional(),
   capacity: z.string().optional(),
   order: z.number().int().min(0).default(0),
-})
+});
 
-type TableFormInput = z.infer<typeof tableSchema>
+type TableFormInput = z.infer<typeof tableSchema>;
 
 export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [editingTable, setEditingTable] = useState<Table | null>(null)
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingTable, setEditingTable] = useState<Table | null>(null);
 
   const createForm = useForm<TableFormInput>({
     resolver: zodResolver(tableSchema),
-    defaultValues: { table_no: '', group_id: '', capacity: '', order: tables.length },
-  })
+    defaultValues: {
+      table_no: "",
+      group_id: "",
+      capacity: "",
+      order: tables.length,
+    },
+  });
 
   const editForm = useForm<TableFormInput>({
     resolver: zodResolver(tableSchema),
-  })
+  });
 
   const handleCreate = async (data: TableFormInput) => {
-    setError(null)
+    setError(null);
     startTransition(async () => {
       const result = await createTable({
         table_no: data.table_no,
         outlet_id: outletId,
-        group_id: data.group_id ? parseInt(data.group_id, 10) : null,
+        group_id:
+          data.group_id && data.group_id !== "none"
+            ? parseInt(data.group_id, 10)
+            : null,
         capacity: data.capacity ? parseInt(data.capacity, 10) : null,
         order: data.order,
         active: true,
-      })
+      });
 
       if (result.success) {
-        setIsCreateOpen(false)
-        createForm.reset({ table_no: '', group_id: '', capacity: '', order: tables.length + 1 })
-        router.refresh()
+        setIsCreateOpen(false);
+        createForm.reset({
+          table_no: "",
+          group_id: "",
+          capacity: "",
+          order: tables.length + 1,
+        });
+        router.refresh();
       } else {
-        setError(result.error || 'Failed to create table')
+        setError(result.error || "Failed to create table");
       }
-    })
-  }
+    });
+  };
 
   const handleEdit = async (data: TableFormInput) => {
-    if (!editingTable) return
-    setError(null)
+    if (!editingTable) return;
+    setError(null);
 
     startTransition(async () => {
       const result = await updateTable(editingTable.id, {
         table_no: data.table_no,
-        group_id: data.group_id ? parseInt(data.group_id, 10) : null,
+        group_id:
+          data.group_id && data.group_id !== "none"
+            ? parseInt(data.group_id, 10)
+            : null,
         capacity: data.capacity ? parseInt(data.capacity, 10) : null,
         order: data.order,
-      })
+      });
 
       if (result.success) {
-        setEditingTable(null)
-        router.refresh()
+        setEditingTable(null);
+        router.refresh();
       } else {
-        setError(result.error || 'Failed to update table')
+        setError(result.error || "Failed to update table");
       }
-    })
-  }
+    });
+  };
 
   const handleToggleActive = async (tableId: number) => {
     startTransition(async () => {
-      const result = await toggleTableActive(tableId)
+      const result = await toggleTableActive(tableId);
       if (result.success) {
-        router.refresh()
+        router.refresh();
       }
-    })
-  }
+    });
+  };
 
   const openEditDialog = (table: Table) => {
-    setEditingTable(table)
+    setEditingTable(table);
     editForm.reset({
       table_no: table.table_no,
-      group_id: table.group_id?.toString() || '',
-      capacity: table.capacity?.toString() || '',
+      group_id: table.group_id?.toString() || "",
+      capacity: table.capacity?.toString() || "",
       order: table.order,
-    })
-  }
+    });
+  };
 
   // Group tables by their group
   const groupedTables = tableGroups.map((group) => ({
     group,
     tables: tables.filter((t) => t.group_id === group.id),
-  }))
-  const ungroupedTables = tables.filter((t) => !t.group_id)
+  }));
+  const ungroupedTables = tables.filter((t) => !t.group_id);
 
   return (
     <Card>
@@ -169,7 +189,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                     </Label>
                     <Input
                       id="create-table_no"
-                      {...createForm.register('table_no')}
+                      {...createForm.register("table_no")}
                       placeholder="e.g., T1, A1, 101"
                       autoFocus
                     />
@@ -183,16 +203,16 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="create-group">Table Group</Label>
                     <Select
-                      value={createForm.watch('group_id')}
+                      value={createForm.watch("group_id")}
                       onValueChange={(value) =>
-                        createForm.setValue('group_id', value)
+                        createForm.setValue("group_id", value)
                       }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a group (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">No group</SelectItem>
+                        <SelectItem value="none">No group</SelectItem>
                         {tableGroups.map((group) => (
                           <SelectItem
                             key={group.id}
@@ -211,7 +231,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                       <Input
                         id="create-capacity"
                         type="number"
-                        {...createForm.register('capacity')}
+                        {...createForm.register("capacity")}
                         min={1}
                         max={100}
                         placeholder="e.g., 4"
@@ -222,15 +242,15 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                       <Input
                         id="create-order"
                         type="number"
-                        {...createForm.register('order', { valueAsNumber: true })}
+                        {...createForm.register("order", {
+                          valueAsNumber: true,
+                        })}
                         min={0}
                       />
                     </div>
                   </div>
 
-                  {error && (
-                    <p className="text-sm text-destructive">{error}</p>
-                  )}
+                  {error && <p className="text-sm text-destructive">{error}</p>}
                 </div>
                 <DialogFooter>
                   <Button
@@ -247,7 +267,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                         Creating...
                       </>
                     ) : (
-                      'Create Table'
+                      "Create Table"
                     )}
                   </Button>
                 </DialogFooter>
@@ -286,7 +306,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                       ))}
                     </div>
                   </div>
-                )
+                ),
             )}
 
             {/* Ungrouped tables */}
@@ -320,9 +340,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
             <form onSubmit={editForm.handleSubmit(handleEdit)}>
               <DialogHeader>
                 <DialogTitle>Edit Table</DialogTitle>
-                <DialogDescription>
-                  Update table details
-                </DialogDescription>
+                <DialogDescription>Update table details</DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-4 py-4">
                 <div className="flex flex-col gap-2">
@@ -331,7 +349,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                   </Label>
                   <Input
                     id="edit-table_no"
-                    {...editForm.register('table_no')}
+                    {...editForm.register("table_no")}
                     autoFocus
                   />
                   {editForm.formState.errors.table_no && (
@@ -344,16 +362,16 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="edit-group">Table Group</Label>
                   <Select
-                    value={editForm.watch('group_id')}
+                    value={editForm.watch("group_id")}
                     onValueChange={(value) =>
-                      editForm.setValue('group_id', value)
+                      editForm.setValue("group_id", value)
                     }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a group" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No group</SelectItem>
+                      <SelectItem value="none">No group</SelectItem>
                       {tableGroups.map((group) => (
                         <SelectItem key={group.id} value={group.id.toString()}>
                           {group.name}
@@ -369,7 +387,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                     <Input
                       id="edit-capacity"
                       type="number"
-                      {...editForm.register('capacity')}
+                      {...editForm.register("capacity")}
                       min={1}
                       max={100}
                     />
@@ -379,7 +397,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                     <Input
                       id="edit-order"
                       type="number"
-                      {...editForm.register('order', { valueAsNumber: true })}
+                      {...editForm.register("order", { valueAsNumber: true })}
                       min={0}
                     />
                   </div>
@@ -402,7 +420,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                       Saving...
                     </>
                   ) : (
-                    'Save Changes'
+                    "Save Changes"
                   )}
                 </Button>
               </DialogFooter>
@@ -411,21 +429,26 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
         </Dialog>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 interface TableCardProps {
-  table: Table
-  onEdit: () => void
-  onToggleActive: () => void
-  isPending: boolean
+  table: Table;
+  onEdit: () => void;
+  onToggleActive: () => void;
+  isPending: boolean;
 }
 
-function TableCard({ table, onEdit, onToggleActive, isPending }: TableCardProps) {
+function TableCard({
+  table,
+  onEdit,
+  onToggleActive,
+  isPending,
+}: TableCardProps) {
   return (
     <div
       className={`flex items-center justify-between rounded-lg border p-3 ${
-        !table.active ? 'bg-muted/50 opacity-70' : ''
+        !table.active ? "bg-muted/50 opacity-70" : ""
       }`}
     >
       <div>
@@ -438,7 +461,7 @@ function TableCard({ table, onEdit, onToggleActive, isPending }: TableCardProps)
           )}
         </div>
         <p className="text-sm text-muted-foreground">
-          {table.capacity ? `Capacity: ${table.capacity}` : 'No capacity set'}
+          {table.capacity ? `Capacity: ${table.capacity}` : "No capacity set"}
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -454,5 +477,5 @@ function TableCard({ table, onEdit, onToggleActive, isPending }: TableCardProps)
         </Button>
       </div>
     </div>
-  )
+  );
 }

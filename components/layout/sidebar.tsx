@@ -17,7 +17,7 @@ import { logoutAction } from '@/lib/actions/auth'
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Setup Wizard', href: '/setup', icon: Rocket },
-  { name: 'Restaurants', href: '/restaurants', icon: Building2 },
+  { name: 'Organizations', href: '/organizations', icon: Building2 },
   { name: 'Outlets', href: '/outlets', icon: MapPin },
 ]
 
