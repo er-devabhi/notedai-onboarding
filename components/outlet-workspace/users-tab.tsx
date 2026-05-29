@@ -45,7 +45,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Plus, Pencil, UserMinus, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Plus, Pencil, UserMinus, Eye, EyeOff, Upload } from 'lucide-react'
+import { BulkUploadUsersDialog } from './bulk-upload-users-dialog'
 import type { User } from '@/types'
 
 interface UsersTabProps {
@@ -77,6 +78,16 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [roleFilter, setRoleFilter] = useState<'team' | 'department'>('team')
+  const [isBulkOpen, setIsBulkOpen] = useState(false)
+
+  const departmentCount = users.filter((u) => u.role === 'DEPARTMENT').length
+  const teamCount = users.length - departmentCount
+  const filteredUsers = users.filter((u) =>
+    roleFilter === 'department'
+      ? u.role === 'DEPARTMENT'
+      : u.role !== 'DEPARTMENT'
+  )
 
   const createForm = useForm<CreateUserInput>({
     resolver: zodResolver(createUserSchema),
@@ -162,7 +173,29 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
               Manage users assigned to this outlet
             </CardDescription>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsBulkOpen(true)}
+            disabled={isPending}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Bulk Upload
+          </Button>
+          <Dialog
+            open={isCreateOpen}
+            onOpenChange={(open) => {
+              setIsCreateOpen(open)
+              if (open) {
+                createForm.reset({
+                  name: '',
+                  email: '',
+                  password: '',
+                  role: roleFilter === 'department' ? 'DEPARTMENT' : 'MANAGER',
+                })
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -250,6 +283,7 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
                       onValueChange={(value) =>
                         createForm.setValue('role', value as typeof userRoles[number])
                       }
+                      disabled={roleFilter === 'department'}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -262,6 +296,11 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
                         ))}
                       </SelectContent>
                     </Select>
+                    {roleFilter === 'department' && (
+                      <p className="text-xs text-muted-foreground">
+                        Role is locked to DEPARTMENT on this tab
+                      </p>
+                    )}
                   </div>
 
                   {error && (
@@ -290,19 +329,44 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
-        {users.length === 0 ? (
+        {/* Role filter */}
+        <div className="mb-4 inline-flex rounded-lg border p-1">
+          <Button
+            variant={roleFilter === 'team' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setRoleFilter('team')}
+          >
+            Team Users ({teamCount})
+          </Button>
+          <Button
+            variant={roleFilter === 'department' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setRoleFilter('department')}
+          >
+            Department Users ({departmentCount})
+          </Button>
+        </div>
+
+        {filteredUsers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-muted-foreground">No users assigned yet</p>
+            <p className="text-muted-foreground">
+              {roleFilter === 'department'
+                ? 'No department users yet'
+                : 'No team users assigned yet'}
+            </p>
             <p className="text-sm text-muted-foreground">
-              Add users to manage this outlet
+              {roleFilter === 'department'
+                ? 'Department users are created automatically when you add department contacts'
+                : 'Add users to manage this outlet'}
             </p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {users.map((user) => (
+            {filteredUsers.map((user) => (
               <div
                 key={user.id}
                 className="flex items-center justify-between rounded-lg border p-4"
@@ -443,6 +507,14 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Bulk Upload Dialog */}
+        <BulkUploadUsersDialog
+          outletId={outletId}
+          restaurantId={restaurantId}
+          open={isBulkOpen}
+          onOpenChange={setIsBulkOpen}
+        />
       </CardContent>
     </Card>
   )

@@ -11,6 +11,7 @@ import {
   Users,
   KeyRound,
   ChevronLeft,
+  Network,
 } from 'lucide-react'
 import { OverviewTab } from './overview-tab'
 import { GeneralInfoTab } from './general-info-tab'
@@ -18,6 +19,7 @@ import { TableGroupsTab } from './table-groups-tab'
 import { TablesTab } from './tables-tab'
 import { UsersTab } from './users-tab'
 import { PasswordTab } from './password-tab'
+import { DepartmentMappingTab } from './department-mapping-tab'
 import type { OutletWithRelations } from '@/types'
 
 interface OutletWorkspaceProps {
@@ -67,6 +69,10 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
             <Users className="h-4 w-4" />
             Users
           </TabsTrigger>
+          <TabsTrigger value="departments" className="gap-2">
+            <Network className="h-4 w-4" />
+            Department Mapping
+          </TabsTrigger>
           <TabsTrigger value="passwords" className="gap-2">
             <KeyRound className="h-4 w-4" />
             Passwords
@@ -101,6 +107,18 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
             outletId={outlet.id}
             restaurantId={outlet.restaurant_id}
             users={outlet.users}
+          />
+        </TabsContent>
+
+        <TabsContent value="departments">
+          <DepartmentMappingTab
+            outletId={outlet.id}
+            departments={outlet.outlet_departments}
+            departmentUsers={outlet.users.filter(
+              (u) => u.role === 'DEPARTMENT'
+            )}
+            defaultEmailCc={outlet.default_email_cc}
+            dashboardUrl={outlet.dashboard_url}
           />
         </TabsContent>
 

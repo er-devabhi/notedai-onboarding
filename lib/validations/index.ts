@@ -1,3 +1,4 @@
+import { UserRole } from '@prisma/client'
 import { z } from 'zod'
 
 // Restaurant validation
@@ -43,6 +44,47 @@ export const tableSchema = z.object({
 
 export type TableInput = z.infer<typeof tableSchema>
 
+// Department (outlet_department) validation
+export const outletDepartmentSchema = z.object({
+  name: z.string().min(1, 'Department name is required').max(255),
+})
+
+export type OutletDepartmentInput = z.infer<typeof outletDepartmentSchema>
+
+// Department contact config validation
+export const departmentConfigSchema = z.object({
+  name: z.string().min(1, 'Contact name is required').max(255),
+  email: z.string().email('A valid email is required').max(255),
+  type: z.enum(['TO', 'CC']),
+  whatsapp_number: z
+    .array(
+      z
+        .string()
+        .regex(/^\d{7,15}$/, 'WhatsApp number must be 7-15 digits (no spaces or symbols)')
+    )
+    .default([]),
+  is_active: z.boolean().default(true),
+})
+
+export type DepartmentConfigInput = z.infer<typeof departmentConfigSchema>
+
+// Outlet notification settings (default CC + dashboard URL)
+export const outletNotificationSettingsSchema = z.object({
+  default_email_cc: z
+    .array(z.string().email('Each CC entry must be a valid email'))
+    .default([]),
+  dashboard_url: z
+    .string()
+    .url('Must be a valid URL')
+    .max(2048)
+    .optional()
+    .or(z.literal('')),
+})
+
+export type OutletNotificationSettingsInput = z.infer<
+  typeof outletNotificationSettingsSchema
+>
+
 // User validation
 export const userRoles = [
   'ADMIN',
@@ -58,7 +100,7 @@ export const userRoles = [
   'TRAINEE',
   'EXECUTIVE',
   'ASSISTANT',
-  'DEPARTMENT',
+  'DEPARTMENT'
 ] as const
 
 export const createUserSchema = z.object({

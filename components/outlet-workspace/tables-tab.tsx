@@ -38,7 +38,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil } from "lucide-react";
+import { Loader2, Plus, Pencil, Upload } from "lucide-react";
+import { BulkUploadDialog } from "./bulk-upload-dialog";
 import type { Table, TableGroup } from "@/types";
 
 interface TablesTabProps {
@@ -61,13 +62,14 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<Table | null>(null);
 
   const createForm = useForm<TableFormInput>({
     resolver: zodResolver(tableSchema),
     defaultValues: {
       table_no: "",
-      group_id: "",
+      group_id: "none",
       capacity: "",
       order: tables.length,
     },
@@ -96,7 +98,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
         setIsCreateOpen(false);
         createForm.reset({
           table_no: "",
-          group_id: "",
+          group_id: "none",
           capacity: "",
           order: tables.length + 1,
         });
@@ -144,7 +146,7 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
     setEditingTable(table);
     editForm.reset({
       table_no: table.table_no,
-      group_id: table.group_id?.toString() || "",
+      group_id: table.group_id?.toString() || "none",
       capacity: table.capacity?.toString() || "",
       order: table.order,
     });
@@ -167,113 +169,125 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
               Manage tables and their assignments
             </CardDescription>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Table
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={createForm.handleSubmit(handleCreate)}>
-                <DialogHeader>
-                  <DialogTitle>Create Table</DialogTitle>
-                  <DialogDescription>
-                    Add a new table to this outlet
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex flex-col gap-4 py-4">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="create-table_no">
-                      Table Number <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="create-table_no"
-                      {...createForm.register("table_no")}
-                      placeholder="e.g., T1, A1, 101"
-                      autoFocus
-                    />
-                    {createForm.formState.errors.table_no && (
-                      <p className="text-sm text-destructive">
-                        {createForm.formState.errors.table_no.message}
-                      </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsBulkOpen(true)}
+              disabled={isPending}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Bulk Upload
+            </Button>
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Table
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={createForm.handleSubmit(handleCreate)}>
+                  <DialogHeader>
+                    <DialogTitle>Create Table</DialogTitle>
+                    <DialogDescription>
+                      Add a new table to this outlet
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-4 py-4">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="create-table_no">
+                        Table Number <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="create-table_no"
+                        {...createForm.register("table_no")}
+                        placeholder="e.g., T1, A1, 101"
+                        autoFocus
+                      />
+                      {createForm.formState.errors.table_no && (
+                        <p className="text-sm text-destructive">
+                          {createForm.formState.errors.table_no.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="create-group">Table Group</Label>
+                      <Select
+                        value={createForm.watch("group_id")}
+                        onValueChange={(value) =>
+                          createForm.setValue("group_id", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a group (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No group</SelectItem>
+                          {tableGroups.map((group) => (
+                            <SelectItem
+                              key={group.id}
+                              value={group.id.toString()}
+                            >
+                              {group.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="create-capacity">Capacity</Label>
+                        <Input
+                          id="create-capacity"
+                          type="number"
+                          {...createForm.register("capacity")}
+                          min={1}
+                          max={100}
+                          placeholder="e.g., 4"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="create-order">Order</Label>
+                        <Input
+                          id="create-order"
+                          type="number"
+                          {...createForm.register("order", {
+                            valueAsNumber: true,
+                          })}
+                          min={0}
+                        />
+                      </div>
+                    </div>
+
+                    {error && (
+                      <p className="text-sm text-destructive">{error}</p>
                     )}
                   </div>
-
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="create-group">Table Group</Label>
-                    <Select
-                      value={createForm.watch("group_id")}
-                      onValueChange={(value) =>
-                        createForm.setValue("group_id", value)
-                      }
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsCreateOpen(false)}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a group (optional)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No group</SelectItem>
-                        {tableGroups.map((group) => (
-                          <SelectItem
-                            key={group.id}
-                            value={group.id.toString()}
-                          >
-                            {group.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="create-capacity">Capacity</Label>
-                      <Input
-                        id="create-capacity"
-                        type="number"
-                        {...createForm.register("capacity")}
-                        min={1}
-                        max={100}
-                        placeholder="e.g., 4"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="create-order">Order</Label>
-                      <Input
-                        id="create-order"
-                        type="number"
-                        {...createForm.register("order", {
-                          valueAsNumber: true,
-                        })}
-                        min={0}
-                      />
-                    </div>
-                  </div>
-
-                  {error && <p className="text-sm text-destructive">{error}</p>}
-                </div>
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsCreateOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isPending}>
-                    {isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      "Create Table"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isPending}>
+                      {isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        "Create Table"
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -332,6 +346,11 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
         )}
 
         {/* Edit Dialog */}
+        <BulkUploadDialog
+          outletId={outletId}
+          open={isBulkOpen}
+          onOpenChange={setIsBulkOpen}
+        />
         <Dialog
           open={!!editingTable}
           onOpenChange={(open) => !open && setEditingTable(null)}

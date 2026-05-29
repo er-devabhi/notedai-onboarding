@@ -50,6 +50,21 @@ export async function getOutlet(id: number) {
           _count: { select: { tables: true } },
         },
       },
+      outlet_departments: {
+        orderBy: { name: "asc" },
+        include: {
+          configs: {
+            orderBy: [{ type: "asc" }, { name: "asc" }],
+          },
+          user_subscriptions: {
+            include: {
+              user: {
+                select: { id: true, name: true, email: true, role: true },
+              },
+            },
+          },
+        },
+      },
     },
   });
   return outlet;

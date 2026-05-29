@@ -44,6 +44,40 @@ export interface User {
   created_at: Date
 }
 
+export interface DepartmentConfig {
+  id: number
+  outlet_department_id: number
+  name: string
+  email: string
+  whatsapp_number: string[]
+  type: 'TO' | 'CC'
+  is_active: boolean
+  created_at: Date
+  updated_at: Date
+}
+
+export interface DepartmentSubscription {
+  id: number
+  user_id: string
+  outlet_department_id: number
+  user: {
+    id: string
+    name: string | null
+    email: string | null
+    role: UserRole
+  }
+}
+
+export interface OutletDepartment {
+  id: number
+  outlet_id: number
+  name: string
+  created_at: Date
+  updated_at: Date
+  configs: DepartmentConfig[]
+  user_subscriptions: DepartmentSubscription[]
+}
+
 export interface OutletWithRelations {
   id: number
   name: string
@@ -53,6 +87,8 @@ export interface OutletWithRelations {
   managerNames: string[]
   serverNames: string[]
   departments: string[]
+  default_email_cc: string[]
+  dashboard_url: string | null
   restaurant_id: number
   created_at: Date
   updated_at: Date
@@ -60,6 +96,7 @@ export interface OutletWithRelations {
   tables: Table[]
   users: User[]
   table_group: TableGroup[]
+  outlet_departments: OutletDepartment[]
 }
 
 export interface SetupStatus {
