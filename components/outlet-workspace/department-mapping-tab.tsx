@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,15 +12,11 @@ import {
 } from "@/lib/validations";
 import {
   createDepartment,
-  updateDepartment,
-  deleteDepartment,
   createDepartmentConfig,
   updateDepartmentConfig,
   deleteDepartmentConfig,
   toggleDepartmentConfigActive,
   updateOutletNotificationSettings,
-  subscribeUserToDepartment,
-  unsubscribeUserFromDepartment,
 } from "@/lib/actions/departments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,12 +30,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import {
   Dialog,
   DialogContent,
@@ -71,17 +61,17 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Mail,
-  Phone,
   X,
+  Check,
   Save,
   Building2,
   UserPlus,
-  UserMinus,
   Upload,
 } from "lucide-react";
+import { toast } from "sonner";
 import type { OutletDepartment, DepartmentConfig, User } from "@/types";
 import { BulkUploadDepartmentsDialog } from "./bulk-upload-departments-dialog";
+import { BulkUploadDeptMappingDialog } from "./bulk-upload-dept-mapping-dialog";
 
 interface DepartmentMappingTabProps {
   outletId: number;
@@ -90,6 +80,9 @@ interface DepartmentMappingTabProps {
   defaultEmailCc: string[];
   dashboardUrl: string | null;
 }
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phoneRegex = /^\d{7,15}$/;
 
 // ── Reusable chips input ──────────────────────────────────────────────────────
 
@@ -175,8 +168,14 @@ function ChipsInput({
   );
 }
 
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const phoneRegex = /^\d{7,15}$/;
+// Inline-edit draft for a single contact row
+interface RowDraft {
+  name: string;
+  email: string;
+  type: "TO" | "CC";
+  whatsapp: string; // comma-separated for compact inline editing
+  is_active: boolean;
+}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -194,22 +193,24 @@ export function DepartmentMappingTab({
   // Department dialogs
   const [isDeptCreateOpen, setIsDeptCreateOpen] = useState(false);
   const [isDeptBulkOpen, setIsDeptBulkOpen] = useState(false);
-  const [editingDept, setEditingDept] = useState<OutletDepartment | null>(null);
+  const [isMappingBulkOpen, setIsMappingBulkOpen] = useState(false);
 
-  // Config dialog
-  const [configDialog, setConfigDialog] = useState<{
-    open: boolean;
-    mode: "create" | "edit";
-    departmentId: number;
-    config: DepartmentConfig | null;
-  }>({ open: false, mode: "create", departmentId: 0, config: null });
+  // Add User dialog (new contact for a department)
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addDeptId, setAddDeptId] = useState<string>("");
 
-  // Map-user dialog
-  const [mapDialog, setMapDialog] = useState<{
-    open: boolean;
-    departmentId: number;
-  }>({ open: false, departmentId: 0 });
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  // Inline "map existing user" draft (per department, no modal)
+  const [mapDraftDeptId, setMapDraftDeptId] = useState<number | null>(null);
+  const [mapUserId, setMapUserId] = useState<string>("");
+  const [mapType, setMapType] = useState<"TO" | "CC">("TO");
+  const [mapWhatsapp, setMapWhatsapp] = useState<string>("");
+  const [mapActive, setMapActive] = useState(true);
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  // Inline row editing
+  const [editingRowId, setEditingRowId] = useState<number | null>(null);
+  const [rowDraft, setRowDraft] = useState<RowDraft | null>(null);
+  const [rowError, setRowError] = useState<string | null>(null);
 
   // Notification settings local state
   const [ccEmails, setCcEmails] = useState<string[]>(defaultEmailCc);
@@ -220,10 +221,7 @@ export function DepartmentMappingTab({
     resolver: zodResolver(outletDepartmentSchema),
     defaultValues: { name: "" },
   });
-  const deptEditForm = useForm<OutletDepartmentInput>({
-    resolver: zodResolver(outletDepartmentSchema),
-  });
-  const configForm = useForm<DepartmentConfigInput>({
+  const addUserForm = useForm<DepartmentConfigInput>({
     resolver: zodResolver(departmentConfigSchema),
     defaultValues: {
       name: "",
@@ -253,7 +251,7 @@ export function DepartmentMappingTab({
     });
   };
 
-  // ── Department handlers ───────────────────────────────────────────────────────
+  // ── Create department ─────────────────────────────────────────────────────────
   const handleCreateDept = (data: OutletDepartmentInput) => {
     setError(null);
     startTransition(async () => {
@@ -268,73 +266,140 @@ export function DepartmentMappingTab({
     });
   };
 
-  const handleEditDept = (data: OutletDepartmentInput) => {
-    if (!editingDept) return;
+  // ── Add User (new contact) ──────────────────────────────────────────────────
+  const openAddDialog = (departmentId?: number) => {
     setError(null);
-    startTransition(async () => {
-      const result = await updateDepartment(editingDept.id, data);
-      if (result.success) {
-        setEditingDept(null);
-        router.refresh();
-      } else {
-        setError(result.error || "Failed to update department");
-      }
-    });
-  };
-
-  const handleDeleteDept = (id: number) => {
-    setError(null);
-    startTransition(async () => {
-      const result = await deleteDepartment(id);
-      if (result.success) {
-        router.refresh();
-      } else {
-        setError(result.error || "Failed to delete department");
-      }
-    });
-  };
-
-  const openEditDept = (dept: OutletDepartment) => {
-    setEditingDept(dept);
-    deptEditForm.reset({ name: dept.name });
-  };
-
-  // ── Config handlers ───────────────────────────────────────────────────────────
-  const openCreateConfig = (departmentId: number) => {
-    configForm.reset({
+    setAddDeptId(departmentId ? departmentId.toString() : "");
+    addUserForm.reset({
       name: "",
       email: "",
       type: "TO",
       whatsapp_number: [],
       is_active: true,
     });
-    setConfigDialog({ open: true, mode: "create", departmentId, config: null });
+    setAddDialogOpen(true);
   };
 
-  const openEditConfig = (departmentId: number, config: DepartmentConfig) => {
-    configForm.reset({
+  const handleAddUser = (data: DepartmentConfigInput) => {
+    if (!addDeptId) {
+      setError("Please select a department");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await createDepartmentConfig(
+        parseInt(addDeptId, 10),
+        data,
+      );
+      if (result.success) {
+        setAddDialogOpen(false);
+        router.refresh();
+      } else {
+        setError(result.error || "Failed to add user");
+      }
+    });
+  };
+
+  // ── Inline "map existing user" draft ──────────────────────────────────────────
+  const startMapDraft = (departmentId: number) => {
+    cancelEditRow();
+    setMapError(null);
+    setMapUserId("");
+    setMapType("TO");
+    setMapWhatsapp("");
+    setMapActive(true);
+    setMapDraftDeptId(departmentId);
+  };
+
+  const cancelMapDraft = () => {
+    setMapDraftDeptId(null);
+    setMapError(null);
+  };
+
+  const saveMapDraft = (departmentId: number) => {
+    if (!mapUserId) {
+      setMapError("Please select a user");
+      return;
+    }
+    const user = departmentUsers.find((u) => u.id === mapUserId);
+    if (!user) return;
+    const numbers = mapWhatsapp
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const payload = {
+      name: (user.name || user.email || "").trim(),
+      email: (user.email || "").trim(),
+      type: mapType,
+      whatsapp_number: numbers,
+      is_active: mapActive,
+    };
+    const parsed = departmentConfigSchema.safeParse(payload);
+    if (!parsed.success) {
+      setMapError(parsed.error.errors[0]?.message || "Invalid user details");
+      return;
+    }
+    setMapError(null);
+    startTransition(async () => {
+      const result = await createDepartmentConfig(departmentId, parsed.data);
+      if (result.success) {
+        cancelMapDraft();
+        router.refresh();
+        toast.success("User mapped to department successfully");
+      } else {
+        setMapError(result.error || "Failed to map user");
+        toast.error(result.error || "Failed to map user");
+      }
+    });
+  };
+
+  // ── Inline row editing ──────────────────────────────────────────────────────
+  const startEditRow = (config: DepartmentConfig) => {
+    setMapDraftDeptId(null);
+    setRowError(null);
+    setEditingRowId(config.id);
+    setRowDraft({
       name: config.name,
       email: config.email,
       type: config.type,
-      whatsapp_number: config.whatsapp_number,
+      whatsapp: config.whatsapp_number.join(", "),
       is_active: config.is_active,
     });
-    setConfigDialog({ open: true, mode: "edit", departmentId, config });
   };
 
-  const handleSubmitConfig = (data: DepartmentConfigInput) => {
-    setError(null);
-    startTransition(async () => {
-      const result =
-        configDialog.mode === "create"
-          ? await createDepartmentConfig(configDialog.departmentId, data)
-          : await updateDepartmentConfig(configDialog.config!.id, data);
+  const cancelEditRow = () => {
+    setEditingRowId(null);
+    setRowDraft(null);
+    setRowError(null);
+  };
 
+  const saveEditRow = (configId: number) => {
+    if (!rowDraft) return;
+    const numbers = rowDraft.whatsapp
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const payload = {
+      name: rowDraft.name.trim(),
+      email: rowDraft.email.trim(),
+      type: rowDraft.type,
+      whatsapp_number: numbers,
+      is_active: rowDraft.is_active,
+    };
+    const parsed = departmentConfigSchema.safeParse(payload);
+    if (!parsed.success) {
+      setRowError(parsed.error.errors[0]?.message || "Invalid details");
+      return;
+    }
+    setRowError(null);
+    startTransition(async () => {
+      const result = await updateDepartmentConfig(configId, parsed.data);
       if (result.success) {
-        setConfigDialog((s) => ({ ...s, open: false }));
+        cancelEditRow();
         router.refresh();
+        toast.success("Contact updated successfully");
       } else {
-        setError(result.error || "Failed to save contact");
+        setRowError(result.error || "Failed to update");
       }
     });
   };
@@ -345,8 +410,10 @@ export function DepartmentMappingTab({
       const result = await deleteDepartmentConfig(id);
       if (result.success) {
         router.refresh();
+        toast.success("Contact deleted successfully");
       } else {
         setError(result.error || "Failed to delete contact");
+        toast.error(result.error || "Failed to delete contact");
       }
     });
   };
@@ -358,53 +425,40 @@ export function DepartmentMappingTab({
     });
   };
 
-  // ── Subscription handlers ───────────────────────────────────────────────────
-  const openMapDialog = (departmentId: number) => {
-    setSelectedUserId("");
-    setError(null);
-    setMapDialog({ open: true, departmentId });
-  };
-
-  const handleSubscribe = () => {
-    if (!selectedUserId) return;
-    setError(null);
-    startTransition(async () => {
-      const result = await subscribeUserToDepartment(
-        selectedUserId,
-        mapDialog.departmentId,
-      );
-      if (result.success) {
-        setMapDialog((s) => ({ ...s, open: false }));
-        setSelectedUserId("");
-        router.refresh();
-      } else {
-        setError(result.error || "Failed to map user");
-      }
-    });
-  };
-
-  const handleUnsubscribe = (userId: string, departmentId: number) => {
-    setError(null);
-    startTransition(async () => {
-      const result = await unsubscribeUserFromDepartment(userId, departmentId);
-      if (result.success) {
-        router.refresh();
-      } else {
-        setError(result.error || "Failed to remove user");
-      }
-    });
-  };
-
-  const whatsappNumbers = configForm.watch("whatsapp_number") || [];
-
-  // DEPARTMENT users not yet subscribed to the dialog's target department
-  const availableUsers = (() => {
-    const dept = departments.find((d) => d.id === mapDialog.departmentId);
-    const subscribedIds = new Set(
-      dept?.user_subscriptions.map((s) => s.user_id) ?? [],
+  // Users available to map into the department being mapped (not already a contact there)
+  const mapAvailableUsers = (() => {
+    const dept = departments.find((d) => d.id === mapDraftDeptId);
+    const existingEmails = new Set(
+      dept?.configs.map((c) => c.email.toLowerCase()) ?? [],
     );
-    return departmentUsers.filter((u) => !subscribedIds.has(u.id));
+    return departmentUsers.filter(
+      (u) => u.email && !existingEmails.has(u.email.toLowerCase()),
+    );
   })();
+  const mapSelectedUser = departmentUsers.find((u) => u.id === mapUserId);
+
+  const totalContacts = departments.reduce(
+    (sum, d) => sum + d.configs.length,
+    0,
+  );
+
+  // For the inline-edit user dropdown: DEPARTMENT users selectable for the row
+  // being edited (excludes emails already used by OTHER rows in that department).
+  const editDept = editingRowId
+    ? departments.find((d) => d.configs.some((c) => c.id === editingRowId))
+    : undefined;
+  const editUsedEmails = new Set(
+    editDept?.configs
+      .filter((c) => c.id !== editingRowId)
+      .map((c) => c.email.toLowerCase()) ?? [],
+  );
+  const editAvailableUsers = departmentUsers.filter(
+    (u) => u.email && !editUsedEmails.has(u.email.toLowerCase()),
+  );
+  const selectedEditUserId =
+    departmentUsers.find(
+      (u) => u.email?.toLowerCase() === (rowDraft?.email ?? "").toLowerCase(),
+    )?.id ?? "";
 
   return (
     <div className="flex flex-col gap-6">
@@ -460,29 +514,49 @@ export function DepartmentMappingTab({
         </CardContent>
       </Card>
 
-      {/* Departments */}
+      {/* Department Configuration */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle>Departments</CardTitle>
+              <CardTitle>Department Configuration</CardTitle>
               <CardDescription>
-                Create departments and configure their TO / CC contacts
+                {departments.length} department
+                {departments.length !== 1 ? "s" : ""} · {totalContacts} contact
+                {totalContacts !== 1 ? "s" : ""}
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsMappingBulkOpen(true)}
+                disabled={isPending || departments.length === 0}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Bulk Mapping
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setIsDeptBulkOpen(true)}
                 disabled={isPending}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Bulk Upload
+                Bulk Departments
               </Button>
-              <Button onClick={() => setIsDeptCreateOpen(true)}>
+              <Button
+                onClick={() => setIsDeptCreateOpen(true)}
+                disabled={isPending}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Department
               </Button>
+              {/* <Button
+                onClick={() => openAddDialog()}
+                disabled={isPending || departments.length === 0}
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add User
+              </Button> */}
             </div>
           </div>
         </CardHeader>
@@ -492,234 +566,285 @@ export function DepartmentMappingTab({
               <Building2 className="h-10 w-10 text-muted-foreground" />
               <p className="mt-3 text-muted-foreground">No departments yet</p>
               <p className="text-sm text-muted-foreground">
-                Add a department to start configuring contacts
+                Add a department to start configuring users
               </p>
             </div>
           ) : (
-            <Accordion type="multiple" className="flex flex-col gap-2">
-              {departments.map((dept) => (
-                <AccordionItem
-                  key={dept.id}
-                  value={dept.id.toString()}
-                  className="rounded-lg border px-4"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <AccordionTrigger className="flex-1 hover:no-underline">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{dept.name}</span>
-                        <Badge variant="secondary">
-                          {dept.configs.length} contact
-                          {dept.configs.length !== 1 ? "s" : ""}
-                        </Badge>
-                      </div>
-                    </AccordionTrigger>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditDept(dept)}
+            <div className="overflow-auto rounded-lg border">
+              <table className="w-full min-w-200 border-collapse text-sm">
+                <thead className="bg-muted text-xs uppercase text-muted-foreground border-b border-gray-200">
+                  <tr>
+                    <th className="sticky left-0 z-20 border-r bg-muted px-3 py-2 text-left font-medium w-56 min-w-55">
+                      Department
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium w-56 min-w-60">
+                      User Name
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium w-56 min-w-55">
+                      Email
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium w-34 min-w-34">
+                      Type
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium w-46 min-w-46">
+                      WhatsApp
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium">Active</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {departments.map((dept) => {
+                    const mappingHere = mapDraftDeptId === dept.id;
+                    // dept name spans all its user rows + the trailing map/footer row
+                    const deptCell = (
+                      <td
+                        rowSpan={dept.configs.length + 1}
+                        className="sticky left-0 z-10 border-t border-r bg-muted px-3 py-2 align-top w-56 min-w-55"
                       >
-                        <Pencil className="h-4 w-4" />
-                        <span className="sr-only">Edit department</span>
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Delete department</span>
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Delete Department
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Delete &quot;{dept.name}&quot; and all{" "}
-                              {dept.configs.length} of its contacts? This cannot
-                              be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteDept(dept.id)}
+                        <div className="flex flex-col gap-2">
+                          <span className="font-medium">{dept.name}</span>
+                          <div className="flex flex-wrap gap-1">
+                            {/* <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => openAddDialog(dept.id)}
+                              disabled={isPending}
                             >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                  <AccordionContent>
-                    <div className="flex flex-col gap-2 pb-2">
-                      {dept.configs.length === 0 ? (
-                        <p className="py-2 text-sm text-muted-foreground">
-                          No contacts configured yet
-                        </p>
-                      ) : (
-                        dept.configs.map((config) => (
-                          <div
-                            key={config.id}
-                            className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
-                              !config.is_active ? "opacity-60" : ""
-                            }`}
-                          >
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">
-                                  {config.name}
-                                </span>
-                                <Badge
-                                  variant={
-                                    config.type === "TO"
-                                      ? "default"
-                                      : "secondary"
+                              <Plus className="mr-1 h-3 w-3" />
+                              Add
+                            </Button> */}
+                          </div>
+                        </div>
+                      </td>
+                    );
+
+                    return (
+                      <Fragment key={dept.id}>
+                        {dept.configs.map((config, idx) => {
+                      const isEditing = editingRowId === config.id;
+                      return (
+                        <tr
+                          key={config.id}
+                          className={!config.is_active ? "bg-muted/10" : ""}
+                        >
+                          {idx === 0 && deptCell}
+
+                          {/* User Name */}
+                          <td className="border-t px-3 py-2 align-top">
+                            {isEditing ? (
+                              <Select
+                                value={selectedEditUserId}
+                                onValueChange={(val) => {
+                                  const u = departmentUsers.find(
+                                    (x) => x.id === val,
+                                  );
+                                  if (u)
+                                    setRowDraft((d) =>
+                                      d
+                                        ? {
+                                            ...d,
+                                            name: u.name || u.email || "",
+                                            email: u.email || "",
+                                          }
+                                        : d,
+                                    );
+                                }}
+                              >
+                                <SelectTrigger className="h-8 min-w-44">
+                                  <SelectValue placeholder="Select user" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {editAvailableUsers.map((u) => (
+                                    <SelectItem key={u.id} value={u.id}>
+                                      {u.name || "Unnamed User"}
+                                      {/* {u.email ? ` — ${u.email}` : ""} */}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              config.name
+                            )}
+                          </td>
+
+                          {/* Email (auto-assigned from the selected user) */}
+                          <td className="border-t px-3 py-2 align-top">
+                            <span className="text-muted-foreground">
+                              {isEditing
+                                ? rowDraft?.email || "—"
+                                : config.email}
+                            </span>
+                          </td>
+
+                          {/* Type */}
+                          <td className="border-t px-3 py-2 align-top w-24 min-w-24">
+                            {isEditing ? (
+                              <Select
+                                value={rowDraft?.type}
+                                onValueChange={(v) =>
+                                  setRowDraft((d) =>
+                                    d ? { ...d, type: v as "TO" | "CC" } : d,
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-8 w-24">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="TO">TO</SelectItem>
+                                  <SelectItem value="CC">CC</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge
+                                variant={
+                                  config.type === "TO" ? "default" : "secondary"
+                                }
+                              >
+                                {config.type}
+                              </Badge>
+                            )}
+                          </td>
+
+                          {/* WhatsApp */}
+                          <td className="border-t px-3 py-2 align-top w-40 min-w-40">
+                            {isEditing ? (
+                              <Input
+                                value={rowDraft?.whatsapp ?? ""}
+                                onChange={(e) =>
+                                  setRowDraft((d) =>
+                                    d ? { ...d, whatsapp: e.target.value } : d,
+                                  )
+                                }
+                                placeholder="comma-separated"
+                                className="h-8 w-40"
+                              />
+                            ) : config.whatsapp_number.length > 0 ? (
+                              <span className="text-muted-foreground">
+                                {config.whatsapp_number.join(", ")}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+
+                          {/* Active */}
+                          <td className="border-t px-3 py-2 align-top">
+                            {isEditing ? (
+                              <Switch
+                                checked={rowDraft?.is_active ?? false}
+                                onCheckedChange={(c) =>
+                                  setRowDraft((d) =>
+                                    d ? { ...d, is_active: c } : d,
+                                  )
+                                }
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleConfig(config.id)}
+                                disabled={isPending}
+                                className="inline-flex items-center gap-1"
+                              >
+                                {config.is_active ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                  >
+                                    <Check className="mr-1 h-3 w-3" />
+                                    Active
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="secondary"
+                                    className="bg-muted text-muted-foreground"
+                                  >
+                                    <X className="mr-1 h-3 w-3" />
+                                    Inactive
+                                  </Badge>
+                                )}
+                              </button>
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="border-t px-3 py-2 align-top text-right">
+                            {isEditing ? (
+                              <div className="flex flex-col items-end gap-1">
+                                <div className="flex justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => saveEditRow(config.id)}
+                                    disabled={isPending}
+                                  >
+                                    {isPending ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Check className="h-4 w-4 text-green-600" />
+                                    )}
+                                    <span className="sr-only">Save</span>
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={cancelEditRow}
+                                    disabled={isPending}
+                                  >
+                                    <X className="h-4 w-4" />
+                                    <span className="sr-only">Cancel</span>
+                                  </Button>
+                                </div>
+                                {rowError && (
+                                  <p className="max-w-48 text-right text-xs text-destructive">
+                                    {rowError}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => startEditRow(config)}
+                                  disabled={
+                                    isPending ||
+                                    editingRowId !== null ||
+                                    mapDraftDeptId !== null
                                   }
                                 >
-                                  {config.type}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                <Mail className="h-3.5 w-3.5" />
-                                {config.email}
-                              </div>
-                              {config.whatsapp_number.length > 0 && (
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                  <Phone className="h-3.5 w-3.5" />
-                                  {config.whatsapp_number.join(", ")}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={config.is_active}
-                                onCheckedChange={() =>
-                                  handleToggleConfig(config.id)
-                                }
-                                disabled={isPending}
-                                aria-label="Toggle active"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openEditConfig(dept.id, config)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Edit contact</span>
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <Trash2 className="h-4 w-4" />
-                                    <span className="sr-only">
-                                      Delete contact
-                                    </span>
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Delete Contact
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Remove &quot;{config.name}&quot; (
-                                      {config.email}) from this department?
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Cancel
-                                    </AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() =>
-                                        handleDeleteConfig(config.id)
-                                      }
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                      <div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openCreateConfig(dept.id)}
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add Contact
-                        </Button>
-                      </div>
-
-                      {/* Mapped DEPARTMENT users */}
-                      <div className="mt-2 flex flex-col gap-2 border-t pt-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium">
-                            Mapped Users
-                            <span className="ml-1 text-muted-foreground">
-                              ({dept.user_subscriptions.length})
-                            </span>
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openMapDialog(dept.id)}
-                          >
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Map User
-                          </Button>
-                        </div>
-                        {dept.user_subscriptions.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">
-                            No users mapped to this department yet
-                          </p>
-                        ) : (
-                          <div className="flex flex-col gap-2">
-                            {dept.user_subscriptions.map((sub) => (
-                              <div
-                                key={sub.id}
-                                className="flex items-center justify-between rounded-lg border p-2.5"
-                              >
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium">
-                                    {sub.user.name || "Unnamed User"}
-                                  </p>
-                                  <p className="truncate text-xs text-muted-foreground">
-                                    {sub.user.email}
-                                  </p>
-                                </div>
+                                  <Pencil className="h-4 w-4" />
+                                  <span className="sr-only">Edit</span>
+                                </Button>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      disabled={isPending}
+                                      disabled={
+                                        isPending ||
+                                        editingRowId !== null ||
+                                        mapDraftDeptId !== null
+                                      }
                                     >
-                                      <UserMinus className="h-4 w-4" />
-                                      <span className="sr-only">
-                                        Remove from department
-                                      </span>
+                                      <Trash2 className="h-4 w-4" />
+                                      <span className="sr-only">Delete</span>
                                     </Button>
                                   </AlertDialogTrigger>
                                   <AlertDialogContent>
                                     <AlertDialogHeader>
                                       <AlertDialogTitle>
-                                        Remove Mapped User
+                                        Delete User
                                       </AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        Remove{" "}
-                                        {sub.user.name ||
-                                          sub.user.email ||
-                                          "this user"}{" "}
-                                        from &quot;{dept.name}&quot;? This only
-                                        removes the department mapping; the user
-                                        account is kept.
+                                        Remove &quot;{config.name}&quot; (
+                                        {config.email}) from {dept.name}? This
+                                        removes the contact and its department
+                                        mapping.
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -728,27 +853,164 @@ export function DepartmentMappingTab({
                                       </AlertDialogCancel>
                                       <AlertDialogAction
                                         onClick={() =>
-                                          handleUnsubscribe(
-                                            sub.user_id,
-                                            dept.id,
-                                          )
+                                          handleDeleteConfig(config.id)
                                         }
                                       >
-                                        Remove
+                                        Delete
                                       </AlertDialogAction>
                                     </AlertDialogFooter>
                                   </AlertDialogContent>
                                 </AlertDialog>
                               </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+                            )}
+                          </td>
+                        </tr>
+                          );
+                        })}
+
+                        {/* Footer / Map row */}
+                        <tr className="bg-muted/5">
+                          {dept.configs.length === 0 && deptCell}
+                          {mappingHere ? (
+                            <>
+                              {/* User dropdown */}
+                              <td className="border-t px-3 py-2 align-top">
+                                <Select
+                                  value={mapUserId}
+                                  onValueChange={setMapUserId}
+                                >
+                                  <SelectTrigger className="h-8 min-w-44">
+                                    <SelectValue placeholder="Select user" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {mapAvailableUsers.length === 0 ? (
+                                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                        No users available
+                                      </div>
+                                    ) : (
+                                      mapAvailableUsers.map((u) => (
+                                        <SelectItem key={u.id} value={u.id}>
+                                          {u.name || "Unnamed User"}
+                                        </SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              {/* Email (auto) */}
+                              <td className="border-t px-3 py-2 align-top">
+                                <span className="text-muted-foreground">
+                                  {mapSelectedUser?.email || "—"}
+                                </span>
+                              </td>
+                              {/* Type */}
+                              <td className="border-t px-3 py-2 align-top w-24 min-w-24">
+                                <Select
+                                  value={mapType}
+                                  onValueChange={(v) =>
+                                    setMapType(v as "TO" | "CC")
+                                  }
+                                >
+                                  <SelectTrigger className="h-8 w-24">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="TO">TO</SelectItem>
+                                    <SelectItem value="CC">CC</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              {/* WhatsApp */}
+                              <td className="border-t px-3 py-2 align-top w-40 min-w-40">
+                                <Input
+                                  value={mapWhatsapp}
+                                  onChange={(e) => setMapWhatsapp(e.target.value)}
+                                  placeholder="comma-separated"
+                                  className="h-8 w-40"
+                                />
+                              </td>
+                              {/* Active */}
+                              <td className="border-t px-3 py-2 align-top">
+                                <Switch
+                                  checked={mapActive}
+                                  onCheckedChange={setMapActive}
+                                />
+                              </td>
+                              {/* Actions */}
+                              <td className="border-t px-3 py-2 align-top text-right">
+                                <div className="flex flex-col items-end gap-1">
+                                  <div className="flex justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => saveMapDraft(dept.id)}
+                                      disabled={isPending || !mapUserId}
+                                    >
+                                      {isPending ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Check className="h-4 w-4 text-green-600" />
+                                      )}
+                                      <span className="sr-only">Save</span>
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={cancelMapDraft}
+                                      disabled={isPending}
+                                    >
+                                      <X className="h-4 w-4" />
+                                      <span className="sr-only">Cancel</span>
+                                    </Button>
+                                  </div>
+                                  {mapError && (
+                                    <p className="max-w-48 text-right text-xs text-destructive">
+                                      {mapError}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td
+                                colSpan={5}
+                                className="border-t px-3 py-2 text-sm text-muted-foreground"
+                              >
+                                {dept.configs.length === 0 ? (
+                                  <>
+                                    No users yet —{" "}
+                                    <button
+                                      type="button"
+                                      className="text-primary underline-offset-2 hover:underline"
+                                      onClick={() => openAddDialog(dept.id)}
+                                    >
+                                      add one
+                                    </button>
+                                  </>
+                                ) : null}
+                              </td>
+                              <td className="border-t px-3 py-2 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => startMapDraft(dept.id)}
+                                  disabled={isPending || editingRowId !== null}
+                                >
+                                  <UserPlus className="mr-1 h-3 w-3" />
+                                  Map
+                                </Button>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {error && (
@@ -769,7 +1031,7 @@ export function DepartmentMappingTab({
                 Add a new department to this outlet
               </DialogDescription>
             </DialogHeader>
-            <div className="flex flex-col gap-2 py-2">
+            <div className="flex flex-col gap-2 py-4">
               <Label htmlFor="dept-create-name">
                 Department Name <span className="text-destructive">*</span>
               </Label>
@@ -785,11 +1047,6 @@ export function DepartmentMappingTab({
                 </p>
               )}
             </div>
-            {error && (
-              <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-2">
-                <p className="text-xs text-destructive">{error}</p>
-              </div>
-            )}
             <DialogFooter>
               <Button
                 type="button"
@@ -813,118 +1070,78 @@ export function DepartmentMappingTab({
         </DialogContent>
       </Dialog>
 
-      {/* Edit Department Dialog */}
-      <Dialog
-        open={!!editingDept}
-        onOpenChange={(open) => !open && setEditingDept(null)}
-      >
+      {/* Add User Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent>
-          <form onSubmit={deptEditForm.handleSubmit(handleEditDept)}>
+          <form onSubmit={addUserForm.handleSubmit(handleAddUser)}>
             <DialogHeader>
-              <DialogTitle>Edit Department</DialogTitle>
-              <DialogDescription>Rename this department</DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-2 py-4">
-              <Label htmlFor="dept-edit-name">
-                Department Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="dept-edit-name"
-                {...deptEditForm.register("name")}
-                autoFocus
-              />
-              {deptEditForm.formState.errors.name && (
-                <p className="text-sm text-destructive">
-                  {deptEditForm.formState.errors.name.message}
-                </p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setEditingDept(null)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Changes"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Config (contact) Dialog */}
-      <Dialog
-        open={configDialog.open}
-        onOpenChange={(open) => setConfigDialog((s) => ({ ...s, open }))}
-      >
-        <DialogContent>
-          <form onSubmit={configForm.handleSubmit(handleSubmitConfig)}>
-            <DialogHeader>
-              <DialogTitle>
-                {configDialog.mode === "create"
-                  ? "Add Contact"
-                  : "Edit Contact"}
-              </DialogTitle>
+              <DialogTitle>Add User</DialogTitle>
               <DialogDescription>
-                Configure a TO or CC contact for this department
+                Create a new contact for a department. A DEPARTMENT user is
+                created and mapped automatically.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4 py-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="config-name">
-                  Contact Name <span className="text-destructive">*</span>
+                <Label htmlFor="add-dept">
+                  Department <span className="text-destructive">*</span>
+                </Label>
+                <Select value={addDeptId} onValueChange={setAddDeptId}>
+                  <SelectTrigger id="add-dept">
+                    <SelectValue placeholder="Select a department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((d) => (
+                      <SelectItem key={d.id} value={d.id.toString()}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="add-name">
+                  User Name <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="config-name"
-                  {...configForm.register("name")}
+                  id="add-name"
+                  {...addUserForm.register("name")}
                   placeholder="e.g., Dr Priyadarshini Pal Singh"
-                  autoFocus
                 />
-                {configForm.formState.errors.name && (
+                {addUserForm.formState.errors.name && (
                   <p className="text-sm text-destructive">
-                    {configForm.formState.errors.name.message}
+                    {addUserForm.formState.errors.name.message}
                   </p>
                 )}
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="config-email">
+                <Label htmlFor="add-email">
                   Email <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="config-email"
+                  id="add-email"
                   type="email"
-                  {...configForm.register("email")}
+                  {...addUserForm.register("email")}
                   placeholder="contact@example.com"
                 />
-                {configForm.formState.errors.email && (
+                {addUserForm.formState.errors.email && (
                   <p className="text-sm text-destructive">
-                    {configForm.formState.errors.email.message}
+                    {addUserForm.formState.errors.email.message}
                   </p>
                 )}
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="config-type">
-                  Type <span className="text-destructive">*</span>
-                </Label>
+                <Label>Type</Label>
                 <Select
-                  value={configForm.watch("type")}
-                  onValueChange={(value) =>
-                    configForm.setValue("type", value as "TO" | "CC")
+                  value={addUserForm.watch("type")}
+                  onValueChange={(v) =>
+                    addUserForm.setValue("type", v as "TO" | "CC")
                   }
                 >
-                  <SelectTrigger id="config-type">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -937,9 +1154,9 @@ export function DepartmentMappingTab({
               <div className="flex flex-col gap-2">
                 <Label>WhatsApp Numbers</Label>
                 <ChipsInput
-                  values={whatsappNumbers}
+                  values={addUserForm.watch("whatsapp_number") || []}
                   onChange={(vals) =>
-                    configForm.setValue("whatsapp_number", vals, {
+                    addUserForm.setValue("whatsapp_number", vals, {
                       shouldValidate: true,
                     })
                   }
@@ -951,25 +1168,18 @@ export function DepartmentMappingTab({
                       : "Must be 7-15 digits (no spaces or symbols)"
                   }
                 />
-                {configForm.formState.errors.whatsapp_number && (
-                  <p className="text-sm text-destructive">
-                    {configForm.formState.errors.whatsapp_number.message}
-                  </p>
-                )}
               </div>
 
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
                   <p className="text-sm font-medium">Active</p>
                   <p className="text-xs text-muted-foreground">
-                    Inactive contacts are skipped in notifications
+                    Inactive users are skipped in notifications
                   </p>
                 </div>
                 <Switch
-                  checked={configForm.watch("is_active")}
-                  onCheckedChange={(checked) =>
-                    configForm.setValue("is_active", checked)
-                  }
+                  checked={addUserForm.watch("is_active")}
+                  onCheckedChange={(c) => addUserForm.setValue("is_active", c)}
                 />
               </div>
 
@@ -979,7 +1189,7 @@ export function DepartmentMappingTab({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setConfigDialog((s) => ({ ...s, open: false }))}
+                onClick={() => setAddDialogOpen(false)}
               >
                 Cancel
               </Button>
@@ -987,77 +1197,14 @@ export function DepartmentMappingTab({
                 {isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
+                    Adding...
                   </>
-                ) : configDialog.mode === "create" ? (
-                  "Add Contact"
                 ) : (
-                  "Save Changes"
+                  "Add User"
                 )}
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Map User Dialog */}
-      <Dialog
-        open={mapDialog.open}
-        onOpenChange={(open) => setMapDialog((s) => ({ ...s, open }))}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Map User to Department</DialogTitle>
-            <DialogDescription>
-              Subscribe an existing DEPARTMENT-role user to this department
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 py-4">
-            <Label htmlFor="map-user">User</Label>
-            {availableUsers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No more department users available to map. Add a contact or
-                create a DEPARTMENT user from the Users tab first.
-              </p>
-            ) : (
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger id="map-user">
-                  <SelectValue placeholder="Select a user" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name || "Unnamed User"}
-                      {u.email ? ` — ${u.email}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setMapDialog((s) => ({ ...s, open: false }))}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubscribe}
-              disabled={isPending || !selectedUserId}
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Mapping...
-                </>
-              ) : (
-                "Map User"
-              )}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1066,6 +1213,13 @@ export function DepartmentMappingTab({
         outletId={outletId}
         open={isDeptBulkOpen}
         onOpenChange={setIsDeptBulkOpen}
+      />
+
+      {/* Bulk Upload Department Mapping Dialog */}
+      <BulkUploadDeptMappingDialog
+        outletId={outletId}
+        open={isMappingBulkOpen}
+        onOpenChange={setIsMappingBulkOpen}
       />
     </div>
   );

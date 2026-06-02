@@ -1,6 +1,7 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Select,
   SelectContent,
@@ -18,43 +19,71 @@ interface Restaurant {
 
 interface OutletsFilterProps {
   restaurants: Restaurant[]
-  selectedRestaurantId?: number
 }
 
-export function OutletsFilter({
-  restaurants,
-  selectedRestaurantId,
-}: OutletsFilterProps) {
+export function OutletsFilter({ restaurants }: OutletsFilterProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const currentSearch = searchParams.get('search') ?? ''
+  const currentRestaurantId = searchParams.get('restaurant_id') ?? 'all'
+
+  const [searchValue, setSearchValue] = useState(currentSearch)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Keep local search in sync when navigating back/forward
+  useEffect(() => {
+    setSearchValue(currentSearch)
+  }, [currentSearch])
+
+  const buildUrl = useCallback(
+    (search: string, restaurantId: string) => {
+      const params = new URLSearchParams()
+      if (search) params.set('search', search)
+      if (restaurantId !== 'all') params.set('restaurant_id', restaurantId)
+      const qs = params.toString()
+      return qs ? `/outlets?${qs}` : '/outlets'
+    },
+    []
+  )
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setSearchValue(value)
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      router.push(buildUrl(value, currentRestaurantId))
+    }, 400)
+  }
 
   const handleRestaurantChange = (value: string) => {
-    if (value === 'all') {
-      router.push('/outlets')
-    } else {
-      router.push(`/outlets?restaurant_id=${value}`)
-    }
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    router.push(buildUrl(searchValue, value))
   }
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row">
       <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search outlets..." className="pl-10" />
+        <Input
+          value={searchValue}
+          onChange={handleSearchChange}
+          placeholder="Search outlets..."
+          className="pl-10"
+        />
       </div>
 
-      <Select
-        value={selectedRestaurantId?.toString() || 'all'}
-        onValueChange={handleRestaurantChange}
-      >
+      <Select value={currentRestaurantId} onValueChange={handleRestaurantChange}>
         <SelectTrigger className="w-full sm:w-[200px]">
           <Building2 className="mr-2 h-4 w-4" />
-          <SelectValue placeholder="All restaurants" />
+          <SelectValue placeholder="All Organizations" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All Restaurants</SelectItem>
-          {restaurants.map((restaurant) => (
-            <SelectItem key={restaurant.id} value={restaurant.id.toString()}>
-              {restaurant.restaurant_name || 'Unnamed'}
+          <SelectItem value="all">All Organizations</SelectItem>
+          {restaurants.map((r) => (
+            <SelectItem key={r.id} value={r.id.toString()}>
+              {r.restaurant_name || 'Unnamed'}
             </SelectItem>
           ))}
         </SelectContent>

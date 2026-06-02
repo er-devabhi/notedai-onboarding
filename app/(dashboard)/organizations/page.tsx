@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getOrganizations } from "@/lib/actions/organizations";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,16 +8,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, MapPin } from "lucide-react";
+import { Building2, MapPin } from "lucide-react";
 import { RestaurantsSearch } from "@/components/organizations/organization-search";
+import { AddOrganizationButton } from "@/components/organizations/add-organization-button";
 
 interface PageProps {
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; search?: string }>;
 }
 
 export default async function OrganizationsPage({ searchParams }: PageProps) {
-  const { type } = await searchParams;
-  const organizations = await getOrganizations(type);
+  const { type, search } = await searchParams;
+  const organizations = await getOrganizations(type, search);
 
   const typeLabel =
     type === "restaurant"
@@ -41,15 +41,13 @@ export default async function OrganizationsPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold">{typeLabelPlural}</h1>
           <p className="text-muted-foreground">
-            {organizations.length} {typeLabelPlural.toLowerCase()} total
+            {organizations.length} {typeLabelPlural.toLowerCase()}{" "}
+            {search ? "found" : "total"}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/organizations/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Add {typeLabel}
-          </Link>
-        </Button>
+        <AddOrganizationButton
+          defaultType={type === "restaurant" ? "RESTAURANT" : "HOSPITAL"}
+        />
       </div>
 
       {/* Search */}
@@ -64,14 +62,14 @@ export default async function OrganizationsPage({ searchParams }: PageProps) {
               No {typeLabelPlural.toLowerCase()} yet
             </p>
             <p className="text-muted-foreground">
-              Create your first {typeLabel.toLowerCase()} to get started
+              {search
+                ? "Try a different search term"
+                : `Create your first ${typeLabel.toLowerCase()} to get started`}
             </p>
-            <Button asChild className="mt-4">
-              <Link href="/organizations/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Add {typeLabel}
-              </Link>
-            </Button>
+            <AddOrganizationButton
+              defaultType={type === "restaurant" ? "RESTAURANT" : "HOSPITAL"}
+              className="mt-4"
+            />
           </CardContent>
         </Card>
       ) : (
@@ -82,7 +80,7 @@ export default async function OrganizationsPage({ searchParams }: PageProps) {
               href={`/organizations/${org.id}`}
               className="group"
             >
-              <Card className="h-full transition-shadow hover:shadow-md">
+              <Card className="h-full transition-all hover:border-gray-300">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>

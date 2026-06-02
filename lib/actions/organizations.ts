@@ -13,16 +13,21 @@ export type ActionResult<T = unknown> = {
   error?: string
 }
 
-export async function getOrganizations(type?: string) {
-  const where =
+export async function getOrganizations(type?: string, search?: string) {
+  const typeFilter =
     type === 'restaurant'
       ? { organizationType: 'RESTAURANT' as const }
       : type === 'hospital'
         ? { organizationType: 'HOSPITAL' as const }
-        : undefined
+        : {}
 
   const organizations = await prisma.restaurants.findMany({
-    where,
+    where: {
+      ...typeFilter,
+      ...(search
+        ? { restaurant_name: { contains: search, mode: 'insensitive' as const } }
+        : {}),
+    },
     orderBy: { created_at: 'desc' },
     include: {
       _count: {

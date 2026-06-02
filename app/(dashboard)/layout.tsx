@@ -1,24 +1,27 @@
-import type { Metadata } from 'next'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
+import type { Metadata } from "next";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { Sidebar } from "@/components/layout/sidebar";
+import { Header } from "@/components/layout/header";
 
 export const metadata: Metadata = {
-  title: 'Outlet Admin',
-  description: 'Internal admin platform for restaurant and outlet setup',
-}
+  title: "Outlet Admin",
+  description: "Internal admin platform for restaurant and outlet setup",
+};
 
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+    <SidebarProvider defaultOpen>
+      <div className="flex w-full bg-background">
+        <Sidebar />
+        <div className="w-full flex flex-col overflow-y-auto">
+          <Header />
+          <main className="flex-1 p-6">{children}</main>
+        </div>
       </div>
-    </div>
-  )
+    </SidebarProvider>
+  );
 }

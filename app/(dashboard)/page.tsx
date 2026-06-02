@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Building2, MapPin, Users, Rocket } from "lucide-react";
 import { OrganizationType } from "@prisma/client";
+import { SetupWizard } from "@/components/setup/setup-wizard";
 
 async function getStats() {
   const [restaurants, hospitals, outlets, users] = await Promise.all([
@@ -34,8 +35,18 @@ async function getStats() {
   return { restaurants, hospitals, outlets, users };
 }
 
+async function getOrganizationsList() {
+  return prisma.restaurants.findMany({
+    orderBy: { restaurant_name: "asc" },
+    select: { id: true, restaurant_name: true, organizationType: true },
+  });
+}
+
 export default async function DashboardPage() {
-  const stats = await getStats();
+  const [stats, organizations] = await Promise.all([
+    getStats(),
+    getOrganizationsList(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -51,9 +62,7 @@ export default async function DashboardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button asChild>
-            <Link href="/setup">Start New Setup</Link>
-          </Button>
+          <SetupWizard restaurants={organizations} />
         </CardContent>
       </Card>
 

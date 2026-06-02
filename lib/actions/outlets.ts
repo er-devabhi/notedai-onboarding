@@ -5,9 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { outletSchema, type OutletInput } from "@/lib/validations";
 import type { ActionResult } from "./organizations";
 
-export async function getOutlets(restaurantId?: number) {
+export async function getOutlets(restaurantId?: number, search?: string) {
   const outlets = await prisma.outlet.findMany({
-    where: restaurantId ? { restaurant_id: restaurantId } : undefined,
+    where: {
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...(search
+        ? { name: { contains: search, mode: "insensitive" } }
+        : {}),
+    },
     orderBy: { created_at: "desc" },
     include: {
       restaurant: {

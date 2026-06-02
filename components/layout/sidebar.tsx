@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Building2,
   LayoutDashboard,
@@ -11,21 +11,21 @@ import {
   MapPin,
   LogOut,
   Rocket,
-} from 'lucide-react'
-import { logoutAction } from '@/lib/actions/auth'
+} from "lucide-react";
+import { logoutAction } from "@/lib/actions/auth";
+import { Sidebar as UISidebar, SidebarRail } from "@/components/ui/sidebar";
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Setup Wizard', href: '/setup', icon: Rocket },
-  { name: 'Organizations', href: '/organizations', icon: Building2 },
-  { name: 'Outlets', href: '/outlets', icon: MapPin },
-]
+  { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Organizations", href: "/organizations", icon: Building2 },
+  { name: "Outlets", href: "/outlets", icon: MapPin },
+];
 
 export function Sidebar() {
-  const pathname = usePathname()
+  const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r bg-sidebar">
+    <UISidebar side="left" variant="sidebar" collapsible="offcanvas" className="z-50">
       {/* Header */}
       <div className="flex h-16 items-center gap-2 border-b px-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
@@ -40,25 +40,25 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1 p-4">
         {navigation.map((item) => {
           const isActive =
-            item.href === '/'
-              ? pathname === '/'
-              : pathname.startsWith(item.href)
+            item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
 
           return (
             <Link
               key={item.name}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
               )}
             >
               <item.icon className="h-4 w-4" />
               {item.name}
             </Link>
-          )
+          );
         })}
       </nav>
 
@@ -75,6 +75,8 @@ export function Sidebar() {
           </Button>
         </form>
       </div>
-    </aside>
-  )
+
+      <SidebarRail />
+    </UISidebar>
+  );
 }

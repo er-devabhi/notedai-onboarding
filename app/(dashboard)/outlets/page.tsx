@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getOutlets } from "@/lib/actions/outlets";
 import { getOrganizations } from "@/lib/actions/organizations";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -10,28 +9,24 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Plus,
-  MapPin,
-  Grid3X3,
-  Users,
-  CheckCircle2,
-  AlertCircle,
-} from "lucide-react";
+import { MapPin, Grid3X3, Users, CheckCircle2, AlertCircle } from "lucide-react";
 import { OutletsFilter } from "@/components/outlets/outlets-filter";
+import { AddOutletButton } from "@/components/outlets/add-outlet-button";
 
 interface OutletsPageProps {
-  searchParams: Promise<{ restaurant_id?: string }>;
+  searchParams: Promise<{ restaurant_id?: string; search?: string }>;
 }
 
 export default async function OutletsPage({ searchParams }: OutletsPageProps) {
-  const { restaurant_id } = await searchParams;
+  const { restaurant_id, search } = await searchParams;
   const restaurantId = restaurant_id ? parseInt(restaurant_id, 10) : undefined;
 
   const [outlets, restaurants] = await Promise.all([
-    getOutlets(restaurantId),
+    getOutlets(restaurantId, search),
     getOrganizations(),
   ]);
+
+  const isFiltered = !!search || !!restaurantId;
 
   return (
     <div className="flex flex-col gap-6">
@@ -40,28 +35,18 @@ export default async function OutletsPage({ searchParams }: OutletsPageProps) {
         <div>
           <h1 className="text-2xl font-bold">Outlets</h1>
           <p className="text-muted-foreground">
-            {outlets.length} outlet{outlets.length !== 1 ? "s" : ""} total
+            {outlets.length} outlet{outlets.length !== 1 ? "s" : ""}{" "}
+            {isFiltered ? "found" : "total"}
           </p>
         </div>
-        <Button asChild>
-          <Link
-            href={
-              restaurantId
-                ? `/outlets/new?restaurant_id=${restaurantId}`
-                : "/outlets/new"
-            }
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Outlet
-          </Link>
-        </Button>
+        <AddOutletButton
+          restaurants={restaurants}
+          preselectedRestaurantId={restaurantId}
+        />
       </div>
 
       {/* Filter */}
-      <OutletsFilter
-        restaurants={restaurants}
-        selectedRestaurantId={restaurantId}
-      />
+      <OutletsFilter restaurants={restaurants} />
 
       {/* Outlet List */}
       {outlets.length === 0 ? (
@@ -70,16 +55,13 @@ export default async function OutletsPage({ searchParams }: OutletsPageProps) {
             <MapPin className="h-12 w-12 text-muted-foreground" />
             <p className="mt-4 text-lg font-medium">No outlets found</p>
             <p className="text-muted-foreground">
-              {restaurantId
-                ? "This restaurant has no outlets yet"
+              {isFiltered
+                ? "Try adjusting your search or filter"
                 : "Create your first outlet to get started"}
             </p>
-            <Button asChild className="mt-4">
-              <Link href="/outlets/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Outlet
-              </Link>
-            </Button>
+            {!isFiltered && (
+              <AddOutletButton restaurants={restaurants} className="mt-4" />
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -96,7 +78,7 @@ export default async function OutletsPage({ searchParams }: OutletsPageProps) {
                 href={`/outlets/${outlet.id}`}
                 className="group"
               >
-                <Card className="h-full transition-shadow hover:shadow-md">
+                <Card className="h-full transition-all hover:border-gray-200">
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
@@ -132,9 +114,7 @@ export default async function OutletsPage({ searchParams }: OutletsPageProps) {
                       {outlet.location && (
                         <div className="flex items-center gap-1">
                           <MapPin className="h-4 w-4" />
-                          <span className="line-clamp-1">
-                            {outlet.location}
-                          </span>
+                          <span className="line-clamp-1">{outlet.location}</span>
                         </div>
                       )}
                       <div className="flex items-center gap-1">
