@@ -24,7 +24,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Save } from "lucide-react";
-import { OrganizationType } from "@prisma/client";
 
 interface Organization {
   id: number;
@@ -55,8 +54,7 @@ export function OrganizationEditForm({
     resolver: zodResolver(organizationSchema),
     defaultValues: {
       restaurant_name: organization.restaurant_name || "",
-      organizationType:
-        OrganizationType.HOSPITAL || OrganizationType.RESTAURANT,
+      organizationType: organization.organizationType,
     },
   });
 
