@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { Suspense, useActionState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { loginAction, type AuthActionState } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/card'
 import { Building2, Loader2 } from 'lucide-react'
 
-export default function LoginPage() {
+function LoginForm() {
   const searchParams = useSearchParams()
   const redirect = searchParams.get('redirect') || '/setup'
 
@@ -24,6 +24,45 @@ export default function LoginPage() {
     {}
   )
 
+  return (
+    <form action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="redirect" value={redirect} />
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="password">Password</Label>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          placeholder="Enter admin password"
+          autoComplete="current-password"
+          autoFocus
+          disabled={isPending}
+          aria-invalid={!!state.error}
+        />
+      </div>
+
+      {state.error && (
+        <p className="text-sm text-destructive" role="alert">
+          {state.error}
+        </p>
+      )}
+
+      <Button type="submit" disabled={isPending} className="w-full">
+        {isPending ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Signing in...
+          </>
+        ) : (
+          'Sign In'
+        )}
+      </Button>
+    </form>
+  )
+}
+
+export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
@@ -37,40 +76,9 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={formAction} className="flex flex-col gap-4">
-            <input type="hidden" name="redirect" value={redirect} />
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Enter admin password"
-                autoComplete="current-password"
-                autoFocus
-                disabled={isPending}
-                aria-invalid={!!state.error}
-              />
-            </div>
-
-            {state.error && (
-              <p className="text-sm text-destructive" role="alert">
-                {state.error}
-              </p>
-            )}
-
-            <Button type="submit" disabled={isPending} className="w-full">
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                'Sign In'
-              )}
-            </Button>
-          </form>
+          <Suspense fallback={null}>
+            <LoginForm />
+          </Suspense>
         </CardContent>
       </Card>
     </main>
