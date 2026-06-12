@@ -78,6 +78,21 @@ export interface OutletDepartment {
   user_subscriptions: DepartmentSubscription[]
 }
 
+export interface Staff {
+  id: number
+  name: string
+  outlet_id: number
+  group_id: number | null
+  department: string | null
+  opd_name: string | null
+  created_at: Date
+  updated_at: Date
+  table_group?: {
+    id: number
+    name: string
+  } | null
+}
+
 export interface OutletWithRelations {
   id: number
   name: string
@@ -97,6 +112,7 @@ export interface OutletWithRelations {
   users: User[]
   table_group: TableGroup[]
   outlet_departments: OutletDepartment[]
+  staffs: Staff[]
 }
 
 export interface SetupStatus {

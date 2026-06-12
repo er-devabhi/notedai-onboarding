@@ -70,6 +70,12 @@ export async function getOutlet(id: number) {
           },
         },
       },
+      staffs: {
+        orderBy: { created_at: "desc" },
+        include: {
+          table_group: { select: { id: true, name: true } },
+        },
+      },
     },
   });
   return outlet;

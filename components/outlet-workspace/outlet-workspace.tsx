@@ -12,6 +12,7 @@ import {
   KeyRound,
   ChevronLeft,
   Network,
+  Stethoscope,
 } from 'lucide-react'
 import { OverviewTab } from './overview-tab'
 import { GeneralInfoTab } from './general-info-tab'
@@ -20,6 +21,7 @@ import { TablesTab } from './tables-tab'
 import { UsersTab } from './users-tab'
 import { PasswordTab } from './password-tab'
 import { DepartmentMappingTab } from './department-mapping-tab'
+import { OpdDetailsTab } from './opd-details-tab'
 import type { OutletWithRelations } from '@/types'
 
 interface OutletWorkspaceProps {
@@ -73,6 +75,10 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
             <Network className="h-4 w-4" />
             Department Mapping
           </TabsTrigger>
+          <TabsTrigger value="opd" className="gap-2">
+            <Stethoscope className="h-4 w-4" />
+            OPD Details
+          </TabsTrigger>
           <TabsTrigger value="passwords" className="gap-2">
             <KeyRound className="h-4 w-4" />
             Passwords
@@ -119,6 +125,14 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
             )}
             defaultEmailCc={outlet.default_email_cc}
             dashboardUrl={outlet.dashboard_url}
+          />
+        </TabsContent>
+
+        <TabsContent value="opd">
+          <OpdDetailsTab
+            outletId={outlet.id}
+            staffs={outlet.staffs}
+            tableGroups={outlet.table_group}
           />
         </TabsContent>
 

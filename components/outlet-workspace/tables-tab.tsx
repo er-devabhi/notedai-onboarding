@@ -219,10 +219,10 @@ export function TablesTab({ outletId, tables, tableGroups }: TablesTabProps) {
                           createForm.setValue("group_id", value)
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select a group (optional)" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="w-full">
                           <SelectItem value="none">No group</SelectItem>
                           {tableGroups.map((group) => (
                             <SelectItem

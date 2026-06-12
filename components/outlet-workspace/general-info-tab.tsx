@@ -149,18 +149,21 @@ export function GeneralInfoTab({ outlet }: GeneralInfoTabProps) {
               values={managerNames}
               onChange={setManagerNames}
               placeholder="Add manager name"
+              hint='Tip: paste a JSON array, e.g. ["John", "Jane"], to add multiple at once'
             />
             <MultiValueInput
               label="Server Names"
               values={serverNames}
               onChange={setServerNames}
               placeholder="Add server name"
+              hint='------'
             />
             <MultiValueInput
               label="Departments"
               values={departments}
               onChange={setDepartments}
               placeholder="Add department"
+              hint='Tip: paste a JSON array, e.g. ["HK", "F&B", "IT"], to add multiple at once'
             />
           </div>
 
@@ -206,6 +209,7 @@ interface MultiValueInputProps {
   values: string[]
   onChange: (values: string[]) => void
   placeholder: string
+  hint?: string
 }
 
 function MultiValueInput({
@@ -213,12 +217,35 @@ function MultiValueInput({
   values,
   onChange,
   placeholder,
+  hint,
 }: MultiValueInputProps) {
   const [inputValue, setInputValue] = useState('')
 
   const handleAdd = () => {
     const trimmed = inputValue.trim()
-    if (trimmed && !values.includes(trimmed)) {
+    if (!trimmed) return
+
+    // Support pasting a stringified JSON array to add multiple values at once
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          const newValues = parsed
+            .map((item) => String(item).trim())
+            .filter((item) => item && !values.includes(item))
+          const deduped = Array.from(new Set(newValues))
+          if (deduped.length > 0) {
+            onChange([...values, ...deduped])
+            setInputValue('')
+            return
+          }
+        }
+      } catch {
+        // Not valid JSON, fall through to single-value add
+      }
+    }
+
+    if (!values.includes(trimmed)) {
       onChange([...values, trimmed])
       setInputValue('')
     }
@@ -238,6 +265,7 @@ function MultiValueInput({
   return (
     <div className="flex flex-col gap-2">
       <Label>{label}</Label>
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       <div className="flex gap-2">
         <Input
           value={inputValue}

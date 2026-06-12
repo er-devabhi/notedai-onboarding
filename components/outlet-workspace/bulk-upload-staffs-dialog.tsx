@@ -12,10 +12,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  bulkUploadTables,
-  type BulkUploadRecord,
-  type BulkUploadResultRow,
-} from '@/lib/actions/bulk-upload-tables'
+  bulkUploadStaffs,
+  type BulkStaffRecord,
+  type BulkStaffResultRow,
+} from '@/lib/actions/bulk-upload-staffs'
 import {
   Upload,
   Download,
@@ -26,17 +26,15 @@ import {
   AlertCircle,
 } from 'lucide-react'
 
-const REQUIRED_HEADERS = ['Table Group', 'Table Name'] as const
+const REQUIRED_HEADERS = ['Name', 'Department', 'OPD Name', 'Group Name'] as const
 
-const SAMPLE_CSV = `Table Group,Table Name
-Ground Floor,T1
-Ground Floor,T2
-First Floor,F1
-First Floor,F2
-Patio,P1
+const SAMPLE_CSV = `Name,Department,OPD Name,Group Name
+Dr. Asha Rao,Cardiology,Cardiology OPD,OPD - Block A
+Nurse Ravi Kumar,Nursing,Cardiology OPD,OPD - Block A
+Dr. Meera Iyer,Orthopedics,Orthopedics OPD,OPD - Block B
 `
 
-interface BulkUploadDialogProps {
+interface BulkUploadStaffsDialogProps {
   outletId: number
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -67,7 +65,7 @@ function splitCsvLine(line: string): string[] {
 }
 
 interface ParseResult {
-  records: BulkUploadRecord[]
+  records: BulkStaffRecord[]
   error?: string
 }
 
@@ -97,19 +95,18 @@ function parseCsv(text: string): ParseResult {
   }
 
   // Parse data rows
-  const records: BulkUploadRecord[] = []
+  const records: BulkStaffRecord[] = []
   for (let i = 1; i < lines.length; i++) {
     const cells = splitCsvLine(lines[i]).map((c) => c.trim())
-    const tableGroup = cells[0] || ''
-    const tableName = cells[1] || ''
-    if (!tableGroup && !tableName) continue
-    if (!tableGroup) {
-      return { records: [], error: `Row ${i + 1}: "Table Group" is required` }
+    const name = cells[0] || ''
+    const department = cells[1] || ''
+    const opdName = cells[2] || ''
+    const groupName = cells[3] || ''
+    if (!name && !department && !opdName && !groupName) continue
+    if (!name) {
+      return { records: [], error: `Row ${i + 1}: "Name" is required` }
     }
-    if (!tableName) {
-      return { records: [], error: `Row ${i + 1}: "Table Name" is required` }
-    }
-    records.push({ rowNumber: i + 1, tableGroup, tableName })
+    records.push({ rowNumber: i + 1, name, department, opdName, groupName })
   }
 
   if (records.length === 0) {
@@ -119,17 +116,17 @@ function parseCsv(text: string): ParseResult {
   return { records }
 }
 
-export function BulkUploadDialog({
+export function BulkUploadStaffsDialog({
   outletId,
   open,
   onOpenChange,
-}: BulkUploadDialogProps) {
+}: BulkUploadStaffsDialogProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [file, setFile] = useState<File | null>(null)
   const [parseError, setParseError] = useState<string | null>(null)
-  const [records, setRecords] = useState<BulkUploadRecord[]>([])
-  const [results, setResults] = useState<BulkUploadResultRow[] | null>(null)
+  const [records, setRecords] = useState<BulkStaffRecord[]>([])
+  const [results, setResults] = useState<BulkStaffResultRow[] | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -176,7 +173,7 @@ export function BulkUploadDialog({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'tables-bulk-upload-sample.csv'
+    a.download = 'opd-staff-bulk-upload-sample.csv'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -184,7 +181,7 @@ export function BulkUploadDialog({
   const handleUpload = () => {
     if (records.length === 0) return
     startTransition(async () => {
-      const result = await bulkUploadTables(outletId, records)
+      const result = await bulkUploadStaffs(outletId, records)
       setResults(result.results)
       router.refresh()
     })
@@ -203,15 +200,17 @@ export function BulkUploadDialog({
     >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Bulk Upload Tables</DialogTitle>
+          <DialogTitle>Bulk Upload OPD Staff</DialogTitle>
           <DialogDescription>
-            Upload a CSV file with &quot;Table Group&quot; and &quot;Table
-            Name&quot; columns. Groups will be created automatically if they
-            don&apos;t exist.
+            Upload a CSV with &quot;Name&quot;, &quot;Department&quot;,
+            &quot;OPD Name&quot; and &quot;Group Name&quot; columns. Group Name
+            refers to an OPD/table group and will be created automatically if
+            it doesn&apos;t exist. Department, OPD Name and Group Name can be
+            left blank.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4 py-2">
+        <div className="flex min-w-0 flex-col gap-4 py-2">
           {!results && (
             <>
               <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
@@ -253,7 +252,7 @@ export function BulkUploadDialog({
                   Drag & drop a CSV file, or click to browse
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Headers must be exactly: Table Group, Table Name
+                  Headers must be exactly: Name, Department, OPD Name, Group Name
                 </p>
                 <input
                   ref={inputRef}
@@ -304,14 +303,16 @@ export function BulkUploadDialog({
                 </div>
               </div>
 
-              <div className="max-h-64 overflow-auto rounded-lg border">
-                <table className="w-full text-sm">
+              <div className="max-h-64 min-w-0 overflow-auto rounded-lg border">
+                <table className="w-full min-w-160 text-sm">
                   <thead className="sticky top-0 bg-muted text-xs uppercase">
                     <tr>
                       <th className="px-3 py-2 text-left">Row</th>
                       <th className="px-3 py-2 text-left">Status</th>
-                      <th className="px-3 py-2 text-left">Group</th>
-                      <th className="px-3 py-2 text-left">Table</th>
+                      <th className="px-3 py-2 text-left">Name</th>
+                      <th className="px-3 py-2 text-left">Department</th>
+                      <th className="px-3 py-2 text-left">OPD Name</th>
+                      <th className="px-3 py-2 text-left">Group Name</th>
                       <th className="px-3 py-2 text-left">Detail</th>
                     </tr>
                   </thead>
@@ -334,9 +335,11 @@ export function BulkUploadDialog({
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2">{r.tableGroup}</td>
-                        <td className="px-3 py-2">{r.tableName}</td>
-                        <td className="px-3 py-2 text-muted-foreground text-nowrap">
+                        <td className="px-3 py-2 text-nowrap">{r.name}</td>
+                        <td className="px-3 py-2 text-nowrap">{r.department}</td>
+                        <td className="px-3 py-2 text-nowrap">{r.opdName}</td>
+                        <td className="px-3 py-2 text-nowrap">{r.groupName}</td>
+                        <td className="px-3 py-2 text-red-600 text-nowrap">
                           {r.error || '-'}
                         </td>
                       </tr>
@@ -356,9 +359,7 @@ export function BulkUploadDialog({
               </Button>
               <Button
                 onClick={handleUpload}
-                disabled={
-                  isPending || records.length === 0 || !!parseError
-                }
+                disabled={isPending || records.length === 0 || !!parseError}
               >
                 {isPending ? (
                   <>
