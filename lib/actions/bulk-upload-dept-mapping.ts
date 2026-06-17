@@ -15,15 +15,19 @@ export interface BulkDeptMappingRecord {
 }
 
 export interface ContactResult {
+  name: string
   email: string
   type: 'TO' | 'CC'
   status: 'success' | 'failed'
   error?: string
+  isNewUser?: boolean
+  password?: string
 }
 
 export interface BulkDeptMappingResultRow {
   rowNumber: number
   department: string
+  departmentCreated: boolean
   status: 'success' | 'partial' | 'failed'
   error?: string
   contacts: ContactResult[]
@@ -64,6 +68,7 @@ export async function bulkUploadDeptMapping(
         {
           rowNumber: 0,
           department: '',
+          departmentCreated: false,
           status: 'failed',
           error: 'Outlet not found',
           contacts: [],
@@ -87,6 +92,7 @@ export async function bulkUploadDeptMapping(
     const rowResult: BulkDeptMappingResultRow = {
       rowNumber: record.rowNumber,
       department: deptName,
+      departmentCreated: false,
       status: 'success',
       contacts: [],
     }
@@ -95,18 +101,6 @@ export async function bulkUploadDeptMapping(
     if (!deptName) {
       rowResult.status = 'failed'
       rowResult.error = 'Department name is required'
-      results.push(rowResult)
-      continue
-    }
-
-    // ── Find existing department ──────────────────────────────────────────
-    const outletDepartment = await prisma.outlet_department.findUnique({
-      where: { outlet_id_name: { outlet_id: outletId, name: deptName } },
-    })
-
-    if (!outletDepartment) {
-      rowResult.status = 'failed'
-      rowResult.error = `Department "${deptName}" not found in this outlet. Create it first.`
       results.push(rowResult)
       continue
     }
@@ -160,6 +154,30 @@ export async function bulkUploadDeptMapping(
       continue
     }
 
+    // ── Upsert department (create if not exists) ───────────────────────
+    let outletDepartment: { id: number } | null = null
+    try {
+      const existing = await prisma.outlet_department.findUnique({
+        where: { outlet_id_name: { outlet_id: outletId, name: deptName } },
+        select: { id: true },
+      })
+      if (existing) {
+        outletDepartment = existing
+      } else {
+        outletDepartment = await prisma.outlet_department.create({
+          data: { outlet_id: outletId, name: deptName },
+          select: { id: true },
+        })
+        rowResult.departmentCreated = true
+      }
+    } catch (err) {
+      console.error('[bulk-dept-mapping] Failed to upsert department', deptName, err)
+      rowResult.status = 'failed'
+      rowResult.error = `Could not create department "${deptName}"`
+      results.push(rowResult)
+      continue
+    }
+
     // ── Create TO contact (HOD) ────────────────────────────────────────
     const hodResult = await createContactWithUser(
       outletDepartment.id,
@@ -193,12 +211,8 @@ export async function bulkUploadDeptMapping(
     }
 
     // ── Determine overall row status ───────────────────────────────────
-    const successCount = rowResult.contacts.filter(
-      (c) => c.status === 'success'
-    ).length
-    const failCount = rowResult.contacts.filter(
-      (c) => c.status === 'failed'
-    ).length
+    const successCount = rowResult.contacts.filter((c) => c.status === 'success').length
+    const failCount = rowResult.contacts.filter((c) => c.status === 'failed').length
 
     if (failCount === 0) {
       rowResult.status = 'success'
@@ -221,10 +235,8 @@ export async function bulkUploadDeptMapping(
     totalSuccess: results.filter((r) => r.status === 'success').length,
     totalPartial: results.filter((r) => r.status === 'partial').length,
     totalFailed: results.filter((r) => r.status === 'failed').length,
-    totalContactsCreated: allContacts.filter((c) => c.status === 'success')
-      .length,
-    totalContactsFailed: allContacts.filter((c) => c.status === 'failed')
-      .length,
+    totalContactsCreated: allContacts.filter((c) => c.status === 'success').length,
+    totalContactsFailed: allContacts.filter((c) => c.status === 'failed').length,
   }
 }
 
@@ -239,10 +251,11 @@ async function createContactWithUser(
     whatsapp_number: string[]
   }
 ): Promise<ContactResult> {
+  const derivedPassword = derivePasswordFromEmail(contact.email)
+
   try {
-    const hashedPassword = await hashPassword(
-      derivePasswordFromEmail(contact.email)
-    )
+    const hashedPassword = await hashPassword(derivedPassword)
+    let isNewUser = false
 
     await prisma.$transaction(async (tx) => {
       await tx.department_config.create({
@@ -273,6 +286,7 @@ async function createContactWithUser(
           },
           select: { id: true },
         })
+        isNewUser = true
       }
 
       await tx.user_department_subscription.upsert({
@@ -290,7 +304,14 @@ async function createContactWithUser(
       })
     })
 
-    return { email: contact.email, type: contact.type, status: 'success' }
+    return {
+      name: contact.name,
+      email: contact.email,
+      type: contact.type,
+      status: 'success',
+      isNewUser,
+      password: isNewUser ? derivedPassword : undefined,
+    }
   } catch (err: unknown) {
     let errorMsg = 'Failed to create contact'
     if (
@@ -301,11 +322,9 @@ async function createContactWithUser(
     ) {
       errorMsg = `Contact "${contact.email}" already exists in this department`
     }
-    console.error(
-      `[bulk-dept-mapping] Failed for ${contact.email}:`,
-      err
-    )
+    console.error(`[bulk-dept-mapping] Failed for ${contact.email}:`, err)
     return {
+      name: contact.name,
       email: contact.email,
       type: contact.type,
       status: 'failed',

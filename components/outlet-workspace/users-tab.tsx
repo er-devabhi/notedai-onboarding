@@ -45,7 +45,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Plus, Pencil, UserMinus, Eye, EyeOff, Upload } from 'lucide-react'
+import { Loader2, Plus, Pencil, Eye, EyeOff, Upload } from 'lucide-react'
 import { BulkUploadUsersDialog } from './bulk-upload-users-dialog'
 import type { User } from '@/types'
 
@@ -101,8 +101,6 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
   const handleCreate = async (data: CreateUserInput) => {
     setError(null)
     startTransition(async () => {
-      console.log('Creating user:', {email: data.email, password: data.password});
-      
       const result = await createUser({
         name: data.name.trim(),
         email: data.email.trim(),
@@ -365,56 +363,68 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {filteredUsers.map((user) => (
-              <div
-                key={user.id}
-                className="flex items-center justify-between rounded-lg border p-4"
-              >
-                <div>
-                  <p className="font-medium">{user.name || 'Unnamed User'}</p>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant="secondary">{user.role.replace(/_/g, ' ')}</Badge>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEditDialog(user)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                      <span className="sr-only">Edit</span>
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <UserMinus className="h-4 w-4" />
-                          <span className="sr-only">Unassign</span>
+          <div className="overflow-auto rounded-lg border">
+            <table className="w-full min-w-160 border-collapse text-sm">
+              <thead className="border-b border-gray-200 bg-muted text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Name</th>
+                  <th className="px-3 py-2 text-left font-medium">Email</th>
+                  <th className="px-3 py-2 text-left font-medium">Role</th>
+                  <th className="px-3 py-2 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user.id}>
+                    <td className="border-t px-3 py-2 font-medium">
+                      {user.name || <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="border-t px-3 py-2 text-muted-foreground">
+                      {user.email}
+                    </td>
+                    <td className="border-t px-3 py-2">
+                      <Badge variant="secondary">{user.role.replace(/_/g, ' ')}</Badge>
+                    </td>
+                    <td className="border-t px-3 py-2 text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditDialog(user)}
+                          disabled={isPending}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          <span className="sr-only">Edit</span>
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Unassign User</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will remove {user.name || user.email} from this
-                            outlet. The user account will not be deleted.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleUnassign(user.id)}
-                          >
-                            Unassign
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              </div>
-            ))}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            {/* <Button variant="ghost" size="icon" disabled={isPending}>
+                              <UserMinus className="h-4 w-4" />
+                              <span className="sr-only">Unassign</span>
+                            </Button> */}
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Unassign User</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will remove {user.name || user.email} from this
+                                outlet. The user account will not be deleted.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleUnassign(user.id)}>
+                                Unassign
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 

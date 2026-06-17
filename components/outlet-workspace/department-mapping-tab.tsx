@@ -530,18 +530,10 @@ export function DepartmentMappingTab({
               <Button
                 variant="outline"
                 onClick={() => setIsMappingBulkOpen(true)}
-                disabled={isPending || departments.length === 0}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                Bulk Mapping
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setIsDeptBulkOpen(true)}
                 disabled={isPending}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Bulk Departments
+                Bulk Department Mapping
               </Button>
               <Button
                 onClick={() => setIsDeptCreateOpen(true)}

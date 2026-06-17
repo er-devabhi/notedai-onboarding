@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,9 @@ import {
   AlertTriangle,
   Loader2,
   AlertCircle,
+  KeyRound,
 } from "lucide-react";
+import type { BulkDeptMappingResultRow } from "@/lib/actions/bulk-upload-dept-mapping";
 
 const REQUIRED_HEADERS = [
   "Department",
@@ -124,10 +126,54 @@ function parseCsv(text: string): ParseResult {
     return { records: [], error: "No data rows found in CSV" };
   }
 
-  debugger;
-  console.log("Parsed records:", records);
-
   return { records };
+}
+
+function downloadCredentialsCsv(results: BulkDeptMappingResultRow[]) {
+  // Pass 1: collect name + password for newly created users
+  const credMap = new Map<string, { name: string; password: string }>()
+  for (const row of results) {
+    for (const contact of row.contacts) {
+      if (contact.isNewUser && contact.password && !credMap.has(contact.email)) {
+        credMap.set(contact.email, { name: contact.name, password: contact.password })
+      }
+    }
+  }
+
+  if (credMap.size === 0) return
+
+  // Pass 2: collect every department each new user appears in (regardless of isNewUser)
+  const deptMap = new Map<string, string[]>()
+  for (const row of results) {
+    for (const contact of row.contacts) {
+      if (!credMap.has(contact.email) || contact.status !== 'success') continue
+      const depts = deptMap.get(contact.email) ?? []
+      if (!depts.includes(row.department)) depts.push(row.department)
+      deptMap.set(contact.email, depts)
+    }
+  }
+
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
+  const lines = ['Name,Email,Password,Department']
+  for (const [email, cred] of credMap.entries()) {
+    const depts = deptMap.get(email) ?? []
+    lines.push(
+      [
+        escape(cred.name),
+        escape(email),
+        escape(cred.password),
+        escape(depts.join(' / ')),
+      ].join(',')
+    )
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'new-user-credentials.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export function BulkUploadDeptMappingDialog({
@@ -145,6 +191,11 @@ export function BulkUploadDeptMappingDialog({
   );
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-download credentials as soon as results arrive so they aren't lost if the modal is closed
+  useEffect(() => {
+    if (results) downloadCredentialsCsv(results);
+  }, [results]);
 
   const reset = () => {
     setFile(null);
@@ -227,9 +278,10 @@ export function BulkUploadDeptMappingDialog({
         <DialogHeader>
           <DialogTitle>Bulk Upload Department Mapping</DialogTitle>
           <DialogDescription>
-            Upload a CSV with department contacts. Each row maps a department to
-            its HOD (TO) and CC contacts. Departments must already exist. Users
-            and subscriptions are created automatically.
+            Upload a CSV with one row per department. Departments are created
+            automatically if they don&apos;t exist. Users are created and mapped
+            in one step. New users&apos; login credentials are shown in the
+            result.
           </DialogDescription>
         </DialogHeader>
 
@@ -342,13 +394,13 @@ export function BulkUploadDeptMappingDialog({
 
               {/* Results table */}
               <div className="max-h-80 min-w-0 overflow-auto rounded-lg border">
-                <table className="w-full min-w-160 border-separate border-spacing-0 text-sm">
+                <table className="w-full min-w-200 border-separate border-spacing-0 text-sm">
                   <thead className="sticky top-0 bg-muted text-xs uppercase text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2 text-left">Row</th>
                       <th className="px-3 py-2 text-left">Status</th>
                       <th className="px-3 py-2 text-left">Department</th>
-                      <th className="px-3 py-2 text-left">Contact Details</th>
+                      <th className="px-3 py-2 text-left">Contact Details &amp; Credentials</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -377,36 +429,55 @@ export function BulkUploadDeptMappingDialog({
                             </span>
                           )}
                         </td>
-                        <td className="border-t px-3 py-2 align-top font-medium">
-                          {r.department}
+                        <td className="border-t px-3 py-2 align-top">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium">{r.department}</span>
+                            {r.departmentCreated && (
+                              <Badge variant="outline" className="w-fit text-xs text-blue-600 border-blue-300">
+                                Created
+                              </Badge>
+                            )}
+                          </div>
                         </td>
-                        <td className="border-t px-3 py-2 align-top text-nowrap">
+                        <td className="border-t px-3 py-2 align-top">
                           {r.error ? (
                             <p className="text-destructive">{r.error}</p>
                           ) : r.contacts.length === 0 ? (
                             <span className="text-muted-foreground">—</span>
                           ) : (
-                            <div className="flex flex-col gap-1.5">
+                            <div className="flex flex-col gap-2">
                               {r.contacts.map((c) => (
                                 <div
                                   key={`${c.email}-${c.type}`}
-                                  className="flex flex-nowrap items-center gap-2 text-xs"
+                                  className="flex flex-col gap-0.5"
                                 >
-                                  <Badge
-                                    variant={
-                                      c.type === "TO" ? "default" : "secondary"
-                                    }
-                                    className="text-xs"
-                                  >
-                                    {c.type}
-                                  </Badge>
-                                  <span>{c.email}</span>
-                                  {c.status === "success" ? (
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                                  ) : (
-                                    <span className="text-destructive">
-                                      — {c.error}
-                                    </span>
+                                  <div className="flex flex-nowrap items-center gap-2 text-xs">
+                                    <Badge
+                                      variant={c.type === "TO" ? "default" : "secondary"}
+                                      className="text-xs"
+                                    >
+                                      {c.type}
+                                    </Badge>
+                                    <span className="font-medium">{c.email}</span>
+                                    {c.status === "success" ? (
+                                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                                    ) : (
+                                      <span className="text-destructive">
+                                        — {c.error}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {c.isNewUser && c.password && (
+                                    <div className="flex items-center gap-1 pl-1 text-xs text-muted-foreground">
+                                      <KeyRound className="h-3 w-3 shrink-0" />
+                                      <span>Password:</span>
+                                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">
+                                        {c.password}
+                                      </code>
+                                      <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
+                                        New user
+                                      </Badge>
+                                    </div>
                                   )}
                                 </div>
                               ))}
@@ -447,6 +518,15 @@ export function BulkUploadDeptMappingDialog({
               <Button variant="outline" onClick={reset}>
                 Upload Another File
               </Button>
+              {results && results.flatMap((r) => r.contacts).some((c) => c.isNewUser && c.password) && (
+                <Button
+                  variant="outline"
+                  onClick={() => downloadCredentialsCsv(results)}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download Credentials
+                </Button>
+              )}
               <Button onClick={handleClose}>Done</Button>
             </>
           )}
