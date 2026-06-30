@@ -475,6 +475,10 @@ model in_patient_feedback_form {
   analysis                      Json?
   summary                       String?
   user_id                       String?                 @db.Uuid
+  bed_number                    String?
+  floor                         String?
+  ip_no                         String?
+  payment_mode                  String?
   hospital_issue_ticket         hospital_issue_ticket[]
   outlet                        outlet?                 @relation(fields: [outlet_id], references: [id])
   users                         users?                  @relation(fields: [user_id], references: [id], onUpdate: NoAction)
@@ -559,6 +563,10 @@ model post_discharge_feedback_form {
   analysis                      Json?
   summary                       String?
   user_id                       String?                 @db.Uuid
+  bed_number                    String?
+  floor                         String?
+  ip_no                         String?
+  payment_mode                  String?
   hospital_issue_ticket         hospital_issue_ticket[]
   outlet                        outlet?                 @relation(fields: [outlet_id], references: [id])
   users                         users?                  @relation(fields: [user_id], references: [id], onUpdate: NoAction)
@@ -747,6 +755,7 @@ enum UserRole {
   EXECUTIVE
   ASSISTANT
   DEPARTMENT
+  MOD
 }
 
 enum OrganizationType {
