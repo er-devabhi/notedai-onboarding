@@ -4,8 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { updateOrganization } from "@/lib/actions/organizations";
+import { organizationSchema, type OrganizationInput } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,12 +35,6 @@ interface OrganizationEditFormProps {
   organization: Organization;
 }
 
-export const organizationSchema = z.object({
-  restaurant_name: z.string().min(1, "Organization name is required"),
-  organizationType: z.enum(["RESTAURANT", "HOSPITAL"]),
-});
-
-export type OrganizationInput = z.infer<typeof organizationSchema>;
 
 export function OrganizationEditForm({
   organization,

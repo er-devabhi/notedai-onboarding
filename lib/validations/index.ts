@@ -1,6 +1,14 @@
 import { UserRole } from '@prisma/client'
 import { z } from 'zod'
 
+// Organization validation
+export const organizationSchema = z.object({
+  restaurant_name: z.string().min(1, 'Organization name is required'),
+  organizationType: z.enum(['RESTAURANT', 'HOSPITAL']),
+})
+
+export type OrganizationInput = z.infer<typeof organizationSchema>
+
 // Restaurant validation
 export const restaurantSchema = z.object({
   restaurant_name: z.string().min(1, 'Restaurant name is required').max(255),

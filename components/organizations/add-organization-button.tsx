@@ -8,7 +8,7 @@ import { createOrganization } from '@/lib/actions/organizations'
 import {
   organizationSchema,
   type OrganizationInput,
-} from '@/components/organizations/organization-edit-form'
+} from '@/lib/validations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

@@ -10,8 +10,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, MapPin, Plus, ExternalLink } from "lucide-react";
+import { ChevronLeft, MapPin, ExternalLink } from "lucide-react";
 import { OrganizationEditForm } from "@/components/organizations/organization-edit-form";
+import { AddOutletButton } from "@/components/outlets/add-outlet-button";
 
 interface OrganizationProps {
   params: Promise<{ id: string }>;
@@ -67,12 +68,16 @@ export default async function OrganizationPage({ params }: OrganizationProps) {
                   {organization.outlets.length !== 1 ? "s" : ""} linked
                 </CardDescription>
               </div>
-              <Button size="sm" asChild>
-                <Link href={`/outlets/new?organization_id=${organization.id}`}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Outlet
-                </Link>
-              </Button>
+              <AddOutletButton
+                restaurants={[
+                  {
+                    id: organization.id,
+                    restaurant_name: organization.restaurant_name,
+                  },
+                ]}
+                preselectedRestaurantId={organization.id}
+                className="h-9"
+              />
             </div>
           </CardHeader>
           <CardContent>
@@ -80,14 +85,17 @@ export default async function OrganizationPage({ params }: OrganizationProps) {
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <MapPin className="h-8 w-8 text-muted-foreground" />
                 <p className="mt-2 text-muted-foreground">No outlets yet</p>
-                <Button size="sm" className="mt-4" asChild>
-                  <Link
-                    href={`/outlets/new?organization_id=${organization.id}`}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add First Outlet
-                  </Link>
-                </Button>
+                <AddOutletButton
+                  restaurants={[
+                    {
+                      id: organization.id,
+                      restaurant_name: organization.restaurant_name,
+                    },
+                  ]}
+                  preselectedRestaurantId={organization.id}
+                  className="mt-4 h-9"
+                  label="Add First Outlet"
+                />
               </div>
             ) : (
               <div className="flex flex-col gap-2">

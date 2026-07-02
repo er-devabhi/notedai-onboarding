@@ -37,6 +37,7 @@ interface AddOutletButtonProps {
   preselectedRestaurantId?: number
   variant?: 'default' | 'outline'
   className?: string
+  label?: string
 }
 
 const outletSchema = z.object({
@@ -54,6 +55,7 @@ export function AddOutletButton({
   preselectedRestaurantId,
   variant = 'default',
   className,
+  label = 'Add Outlet',
 }: AddOutletButtonProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -107,7 +109,7 @@ export function AddOutletButton({
       <DialogTrigger asChild>
         <Button variant={variant} className={className}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Outlet
+          {label}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">

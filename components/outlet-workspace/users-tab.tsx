@@ -53,6 +53,7 @@ interface UsersTabProps {
   outletId: number
   restaurantId: number
   users: User[]
+  showDepartmentUsers?: boolean
 }
 
 const createUserSchema = z.object({
@@ -71,7 +72,12 @@ const editUserSchema = z.object({
 type CreateUserInput = z.infer<typeof createUserSchema>
 type EditUserInput = z.infer<typeof editUserSchema>
 
-export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
+export function UsersTab({
+  outletId,
+  restaurantId,
+  users,
+  showDepartmentUsers = true,
+}: UsersTabProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -84,7 +90,7 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
   const departmentCount = users.filter((u) => u.role === 'DEPARTMENT').length
   const teamCount = users.length - departmentCount
   const filteredUsers = users.filter((u) =>
-    roleFilter === 'department'
+    showDepartmentUsers && roleFilter === 'department'
       ? u.role === 'DEPARTMENT'
       : u.role !== 'DEPARTMENT'
   )
@@ -332,22 +338,24 @@ export function UsersTab({ outletId, restaurantId, users }: UsersTabProps) {
       </CardHeader>
       <CardContent>
         {/* Role filter */}
-        <div className="mb-4 inline-flex rounded-lg border p-1">
-          <Button
-            variant={roleFilter === 'team' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setRoleFilter('team')}
-          >
-            Team Users ({teamCount})
-          </Button>
-          <Button
-            variant={roleFilter === 'department' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setRoleFilter('department')}
-          >
-            Department Users ({departmentCount})
-          </Button>
-        </div>
+        {showDepartmentUsers && (
+          <div className="mb-4 inline-flex rounded-lg border p-1">
+            <Button
+              variant={roleFilter === 'team' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setRoleFilter('team')}
+            >
+              Team Users ({teamCount})
+            </Button>
+            <Button
+              variant={roleFilter === 'department' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setRoleFilter('department')}
+            >
+              Department Users ({departmentCount})
+            </Button>
+          </div>
+        )}
 
         {filteredUsers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">

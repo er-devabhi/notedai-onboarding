@@ -29,6 +29,8 @@ interface OutletWorkspaceProps {
 }
 
 export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
+  const isRestaurant = outlet.restaurant?.organizationType === 'RESTAURANT'
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -71,14 +73,18 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
             <Users className="h-4 w-4" />
             Users
           </TabsTrigger>
-          <TabsTrigger value="departments" className="gap-2">
-            <Network className="h-4 w-4" />
-            Department Mapping
-          </TabsTrigger>
-          <TabsTrigger value="opd" className="gap-2">
-            <Stethoscope className="h-4 w-4" />
-            OPD Details
-          </TabsTrigger>
+          {!isRestaurant && (
+            <TabsTrigger value="departments" className="gap-2">
+              <Network className="h-4 w-4" />
+              Department Mapping
+            </TabsTrigger>
+          )}
+          {!isRestaurant && (
+            <TabsTrigger value="opd" className="gap-2">
+              <Stethoscope className="h-4 w-4" />
+              OPD Details
+            </TabsTrigger>
+          )}
           <TabsTrigger value="passwords" className="gap-2">
             <KeyRound className="h-4 w-4" />
             Passwords
@@ -113,28 +119,33 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
             outletId={outlet.id}
             restaurantId={outlet.restaurant_id}
             users={outlet.users}
+            showDepartmentUsers={!isRestaurant}
           />
         </TabsContent>
 
-        <TabsContent value="departments">
-          <DepartmentMappingTab
-            outletId={outlet.id}
-            departments={outlet.outlet_departments}
-            departmentUsers={outlet.users.filter(
-              (u) => u.role === 'DEPARTMENT'
-            )}
-            defaultEmailCc={outlet.default_email_cc}
-            dashboardUrl={outlet.dashboard_url}
-          />
-        </TabsContent>
+        {!isRestaurant && (
+          <TabsContent value="departments">
+            <DepartmentMappingTab
+              outletId={outlet.id}
+              departments={outlet.outlet_departments}
+              departmentUsers={outlet.users.filter(
+                (u) => u.role === 'DEPARTMENT'
+              )}
+              defaultEmailCc={outlet.default_email_cc}
+              dashboardUrl={outlet.dashboard_url}
+            />
+          </TabsContent>
+        )}
 
-        <TabsContent value="opd">
-          <OpdDetailsTab
-            outletId={outlet.id}
-            staffs={outlet.staffs}
-            tableGroups={outlet.table_group}
-          />
-        </TabsContent>
+        {!isRestaurant && (
+          <TabsContent value="opd">
+            <OpdDetailsTab
+              outletId={outlet.id}
+              staffs={outlet.staffs}
+              tableGroups={outlet.table_group}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="passwords">
           <PasswordTab users={outlet.users} />

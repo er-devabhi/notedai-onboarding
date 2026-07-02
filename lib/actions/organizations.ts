@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import {
   OrganizationInput,
   organizationSchema,
-} from '@/components/organizations/organization-edit-form'
+} from '@/lib/validations'
 
 export type ActionResult<T = unknown> = {
   success: boolean
