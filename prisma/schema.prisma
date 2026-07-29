@@ -19,10 +19,12 @@ model users {
   role                         UserRole                       @default(MANAGER)
   audio_files                  audio_files[]
   conversation                 conversation[]
+  daily_targets                daily_targets[]
   devices                      devices[]
   in_patient_feedback_form     in_patient_feedback_form[]
   notifications                notifications[]
   post_discharge_feedback_form post_discharge_feedback_form[]
+  qr_login                     qr_login[]
   support_ticket               support_ticket[]
   department_subscriptions     user_department_subscription[]
   outlet                       outlet?                        @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -70,6 +72,7 @@ model outlet {
   patient                      patient[]
   patient_autocomplete         patient_autocomplete[]
   post_discharge_feedback_form post_discharge_feedback_form[]
+  qr_login                     qr_login[]
   staffs                       staffs[]
   support_ticket               support_ticket[]
   tables                       table[]
@@ -378,6 +381,7 @@ model hospital_issue_ticket {
   in_patient_feedback_id       String?
   post_discharge_feedback_id   String?
   escalation_group_id          Int?
+  gre_corrective_actions       String?
   conversation                 conversation?                 @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
   hospital_escalation_group    hospital_escalation_group?    @relation(fields: [escalation_group_id], references: [id])
   in_patient_feedback_form     in_patient_feedback_form?     @relation(fields: [in_patient_feedback_id], references: [id], onDelete: Cascade)
@@ -716,11 +720,14 @@ model hospital_escalation_group {
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
   updated_at            DateTime                @db.Timestamptz(6)
   id                    Int                     @id @default(autoincrement())
+  service_recovery      String?
+  level                 EscalationLevel         @default(Department)
   outlet                outlet                  @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
   hospital_issue_ticket hospital_issue_ticket[]
 
   @@index([department])
   @@index([outlet_id])
+  @@index([level])
 }
 
 model patient_autocomplete {
@@ -740,6 +747,37 @@ model patient_autocomplete {
   @@index([uhid])
 }
 
+model daily_targets {
+  id              Int      @id @default(autoincrement())
+  user_id         String?  @db.Uuid
+  department_name String?
+  target_date     DateTime @db.Date
+  target_count    Int
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+  users           users?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, target_date])
+}
+
+model qr_login {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outlet_id    Int
+  label        String        @db.VarChar
+  token_hash   String        @unique @db.VarChar
+  user_id      String        @db.Uuid
+  status       QrLoginStatus @default(ACTIVE)
+  expires_at   DateTime?
+  last_used_at DateTime?
+  created_at   DateTime      @default(now())
+  revoked_at   DateTime?
+  outlet       outlet        @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+  users        users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([outlet_id])
+  @@index([user_id])
+}
+
 enum UserRole {
   ADMIN
   MANAGER
@@ -756,6 +794,7 @@ enum UserRole {
   ASSISTANT
   DEPARTMENT
   MOD
+  SERVICE_RECOVERY
 }
 
 enum OrganizationType {
@@ -771,6 +810,7 @@ enum contact_type {
 enum AudioFileType {
   Feedback
   QrCodeFeedback
+  RcaCapa
 }
 
 enum ConversationType {
@@ -806,6 +846,7 @@ enum HospitalIssueTicketStatus {
   NotEscalated
   Current
   Closed
+  Resolved
 }
 
 enum HospitalPatientComment {
@@ -881,4 +922,15 @@ enum SalesStatusType {
 enum TicketStatus {
   Pending
   Resolved
+}
+
+enum EscalationLevel {
+  ServiceExcellence
+  Department
+}
+
+enum QrLoginStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
 }

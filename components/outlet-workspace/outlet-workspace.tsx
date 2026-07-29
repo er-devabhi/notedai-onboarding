@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   Network,
   Stethoscope,
+  QrCode,
 } from 'lucide-react'
 import { OverviewTab } from './overview-tab'
 import { GeneralInfoTab } from './general-info-tab'
@@ -20,6 +21,7 @@ import { TableGroupsTab } from './table-groups-tab'
 import { TablesTab } from './tables-tab'
 import { UsersTab } from './users-tab'
 import { PasswordTab } from './password-tab'
+import { QrLoginsTab } from './qr-logins-tab'
 import { DepartmentMappingTab } from './department-mapping-tab'
 import { OpdDetailsTab } from './opd-details-tab'
 import type { OutletWithRelations } from '@/types'
@@ -89,6 +91,10 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
             <KeyRound className="h-4 w-4" />
             Passwords
           </TabsTrigger>
+          <TabsTrigger value="qr-logins" className="gap-2">
+            <QrCode className="h-4 w-4" />
+            QR Logins
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -149,6 +155,10 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
 
         <TabsContent value="passwords">
           <PasswordTab users={outlet.users} />
+        </TabsContent>
+
+        <TabsContent value="qr-logins">
+          <QrLoginsTab outletId={outlet.id} users={outlet.users} />
         </TabsContent>
       </Tabs>
     </div>
