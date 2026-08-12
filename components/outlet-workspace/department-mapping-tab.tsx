@@ -67,6 +67,7 @@ import {
   Building2,
   UserPlus,
   Upload,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { OutletDepartment, DepartmentConfig, User } from "@/types";
@@ -83,6 +84,16 @@ interface DepartmentMappingTabProps {
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^\d{7,15}$/;
+
+type DepartmentMappableRole = "DEPARTMENT" | "GRE_HEAD" | "SERVICE_EXCELLENCE";
+type RoleFilter = "ALL" | DepartmentMappableRole;
+
+const ROLE_FILTER_OPTIONS: { value: RoleFilter; label: string }[] = [
+  { value: "ALL", label: "All Roles" },
+  { value: "DEPARTMENT", label: "DEPARTMENT" },
+  { value: "GRE_HEAD", label: "GRE HEAD" },
+  { value: "SERVICE_EXCELLENCE", label: "SERVICE EXCELLENCE" },
+];
 
 // ── Reusable chips input ──────────────────────────────────────────────────────
 
@@ -211,6 +222,9 @@ export function DepartmentMappingTab({
   const [editingRowId, setEditingRowId] = useState<number | null>(null);
   const [rowDraft, setRowDraft] = useState<RowDraft | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
+
+  // Role filter for the department configuration table
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
 
   // Notification settings local state
   const [ccEmails, setCcEmails] = useState<string[]>(defaultEmailCc);
@@ -425,25 +439,26 @@ export function DepartmentMappingTab({
     });
   };
 
+  // Users selectable for mapping/editing, scoped to the active role filter
+  const roleFilteredUsers =
+    roleFilter === "ALL"
+      ? departmentUsers
+      : departmentUsers.filter((u) => u.role === roleFilter);
+
   // Users available to map into the department being mapped (not already a contact there)
   const mapAvailableUsers = (() => {
     const dept = departments.find((d) => d.id === mapDraftDeptId);
     const existingEmails = new Set(
       dept?.configs.map((c) => c.email.toLowerCase()) ?? [],
     );
-    return departmentUsers.filter(
+    return roleFilteredUsers.filter(
       (u) => u.email && !existingEmails.has(u.email.toLowerCase()),
     );
   })();
-  const mapSelectedUser = departmentUsers.find((u) => u.id === mapUserId);
+  const mapSelectedUser = roleFilteredUsers.find((u) => u.id === mapUserId);
 
-  const totalContacts = departments.reduce(
-    (sum, d) => sum + d.configs.length,
-    0,
-  );
-
-  // For the inline-edit user dropdown: DEPARTMENT users selectable for the row
-  // being edited (excludes emails already used by OTHER rows in that department).
+  // For the inline-edit user dropdown: users selectable for the row being
+  // edited (excludes emails already used by OTHER rows in that department).
   const editDept = editingRowId
     ? departments.find((d) => d.configs.some((c) => c.id === editingRowId))
     : undefined;
@@ -452,13 +467,30 @@ export function DepartmentMappingTab({
       .filter((c) => c.id !== editingRowId)
       .map((c) => c.email.toLowerCase()) ?? [],
   );
-  const editAvailableUsers = departmentUsers.filter(
+  const editAvailableUsers = roleFilteredUsers.filter(
     (u) => u.email && !editUsedEmails.has(u.email.toLowerCase()),
   );
   const selectedEditUserId =
-    departmentUsers.find(
+    roleFilteredUsers.find(
       (u) => u.email?.toLowerCase() === (rowDraft?.email ?? "").toLowerCase(),
     )?.id ?? "";
+
+  const roleFilterLabel =
+    ROLE_FILTER_OPTIONS.find((o) => o.value === roleFilter)?.label ?? "";
+
+  // Departments with their configs scoped to the active role filter
+  const visibleDepartments = departments.map((dept) => ({
+    ...dept,
+    visibleConfigs:
+      roleFilter === "ALL"
+        ? dept.configs
+        : dept.configs.filter((c) => c.users?.role === roleFilter),
+  }));
+
+  const totalContacts = visibleDepartments.reduce(
+    (sum, d) => sum + d.visibleConfigs.length,
+    0,
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -529,6 +561,33 @@ export function DepartmentMappingTab({
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
+                size="icon"
+                onClick={() => startTransition(() => router.refresh())}
+                disabled={isPending}
+                title="Refresh"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`}
+                />
+                <span className="sr-only">Refresh</span>
+              </Button>
+              <Select
+                value={roleFilter}
+                onValueChange={(v) => setRoleFilter(v as RoleFilter)}
+              >
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLE_FILTER_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
                 onClick={() => setIsMappingBulkOpen(true)}
                 disabled={isPending}
               >
@@ -588,12 +647,12 @@ export function DepartmentMappingTab({
                   </tr>
                 </thead>
                 <tbody>
-                  {departments.map((dept) => {
+                  {visibleDepartments.map((dept) => {
                     const mappingHere = mapDraftDeptId === dept.id;
                     // dept name spans all its user rows + the trailing map/footer row
                     const deptCell = (
                       <td
-                        rowSpan={dept.configs.length + 1}
+                        rowSpan={dept.visibleConfigs.length + 1}
                         className="sticky left-0 z-10 border-t border-r bg-muted px-3 py-2 align-top w-56 min-w-55"
                       >
                         <div className="flex flex-col gap-2">
@@ -616,8 +675,9 @@ export function DepartmentMappingTab({
 
                     return (
                       <Fragment key={dept.id}>
-                        {dept.configs.map((config, idx) => {
+                        {dept.visibleConfigs.map((config, idx) => {
                       const isEditing = editingRowId === config.id;
+                      const configRole = config.users?.role;
                       return (
                         <tr
                           key={config.id}
@@ -631,7 +691,7 @@ export function DepartmentMappingTab({
                               <Select
                                 value={selectedEditUserId}
                                 onValueChange={(val) => {
-                                  const u = departmentUsers.find(
+                                  const u = roleFilteredUsers.find(
                                     (x) => x.id === val,
                                   );
                                   if (u)
@@ -659,7 +719,14 @@ export function DepartmentMappingTab({
                                 </SelectContent>
                               </Select>
                             ) : (
-                              config.name
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span>{config.name}</span>
+                                {roleFilter === "ALL" && configRole && (
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {configRole.replace(/_/g, " ")}
+                                  </Badge>
+                                )}
+                              </div>
                             )}
                           </td>
 
@@ -862,7 +929,7 @@ export function DepartmentMappingTab({
 
                         {/* Footer / Map row */}
                         <tr className="bg-muted/5">
-                          {dept.configs.length === 0 && deptCell}
+                          {dept.visibleConfigs.length === 0 && deptCell}
                           {mappingHere ? (
                             <>
                               {/* User dropdown */}
@@ -969,17 +1036,22 @@ export function DepartmentMappingTab({
                                 colSpan={5}
                                 className="border-t px-3 py-2 text-sm text-muted-foreground"
                               >
-                                {dept.configs.length === 0 ? (
-                                  <>
-                                    No users yet —{" "}
-                                    <button
-                                      type="button"
-                                      className="text-primary underline-offset-2 hover:underline"
-                                      onClick={() => openAddDialog(dept.id)}
-                                    >
-                                      add one
-                                    </button>
-                                  </>
+                                {dept.visibleConfigs.length === 0 ? (
+                                  roleFilter === "ALL" ||
+                                  roleFilter === "DEPARTMENT" ? (
+                                    <>
+                                      No users yet —{" "}
+                                      <button
+                                        type="button"
+                                        className="text-primary underline-offset-2 hover:underline"
+                                        onClick={() => openAddDialog(dept.id)}
+                                      >
+                                        add one
+                                      </button>
+                                    </>
+                                  ) : (
+                                    `No ${roleFilterLabel} users mapped yet`
+                                  )
                                 ) : null}
                               </td>
                               <td className="border-t px-3 py-2 text-right">

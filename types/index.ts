@@ -54,6 +54,7 @@ export interface DepartmentConfig {
   is_active: boolean
   created_at: Date
   updated_at: Date
+  users: { role: UserRole } | null
 }
 
 export interface DepartmentSubscription {

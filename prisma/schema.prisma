@@ -20,6 +20,7 @@ model users {
   audio_files                  audio_files[]
   conversation                 conversation[]
   daily_targets                daily_targets[]
+  department_config            department_config[]
   devices                      devices[]
   in_patient_feedback_form     in_patient_feedback_form[]
   notifications                notifications[]
@@ -62,6 +63,7 @@ model outlet {
   config                       Json?
   admission                    admission[]
   conversation                 conversation[]
+  escalation_level             escalation_level[]
   hospital_escalation_group    hospital_escalation_group[]
   hospital_issue_ticket        hospital_issue_ticket[]
   hospital_patient             hospital_patient[]
@@ -116,9 +118,12 @@ model department_config {
   is_active            Boolean           @default(true)
   created_at           DateTime          @default(now())
   updated_at           DateTime          @updatedAt
+  user_id              String?           @db.Uuid
   outlet_department    outlet_department @relation(fields: [outlet_department_id], references: [id])
+  users                users?            @relation(fields: [user_id], references: [id])
 
   @@index([outlet_department_id])
+  @@index([user_id])
 }
 
 model table_group {
@@ -722,12 +727,19 @@ model hospital_escalation_group {
   id                    Int                     @id @default(autoincrement())
   service_recovery      String?
   level                 EscalationLevel         @default(Department)
+  current_level_id      Int?
+  sla_notified_at       DateTime?               @db.Timestamptz(6)
+  sla_notified_level_id Int?
+  gre_corrective_action String?
+  escalation_action     escalation_action[]
+  escalation_level      escalation_level?       @relation(fields: [current_level_id], references: [id])
   outlet                outlet                  @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
   hospital_issue_ticket hospital_issue_ticket[]
 
   @@index([department])
   @@index([outlet_id])
   @@index([level])
+  @@index([current_level_id])
 }
 
 model patient_autocomplete {
@@ -758,6 +770,52 @@ model daily_targets {
   users           users?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, target_date])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model escalation_action {
+  id                        Int                        @id @default(autoincrement())
+  escalation_group_id       Int?
+  level_id                  Int?
+  level_key                 String?
+  role                      UserRole?
+  performed_by              String?                    @db.Uuid
+  performed_by_name         String?
+  rca                       String?
+  capa                      String?
+  corrective_action         String?
+  service_recovery          String?
+  action                    EscalationActionType
+  escalated_to_level_id     Int?
+  notes                     String?
+  created_at                DateTime                   @default(now()) @db.Timestamptz(6)
+  ticket_id                 Int?
+  hospital_escalation_group hospital_escalation_group? @relation(fields: [escalation_group_id], references: [id], onDelete: Cascade)
+  escalation_level          escalation_level?          @relation(fields: [level_id], references: [id])
+
+  @@index([escalation_group_id, created_at])
+  @@index([performed_by, action])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model escalation_level {
+  id                        Int                         @id @default(autoincrement())
+  outlet_id                 Int
+  key                       String
+  name                      String
+  role                      UserRole
+  sequence                  Int
+  is_active                 Boolean                     @default(true)
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @db.Timestamptz(6)
+  field_config              Json?
+  sla_config                Json?
+  escalation_action         escalation_action[]
+  outlet                    outlet                      @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+  hospital_escalation_group hospital_escalation_group[]
+
+  @@unique([outlet_id, key])
+  @@index([outlet_id, sequence])
 }
 
 model qr_login {
@@ -795,6 +853,8 @@ enum UserRole {
   DEPARTMENT
   MOD
   SERVICE_RECOVERY
+  SERVICE_EXCELLENCE
+  GRE_HEAD
 }
 
 enum OrganizationType {
@@ -825,6 +885,7 @@ enum EscalationStatus {
   Pending
   Acknowledged
   Resolved
+  Closed
 }
 
 enum FeedbackFilledBy {
@@ -927,6 +988,14 @@ enum TicketStatus {
 enum EscalationLevel {
   ServiceExcellence
   Department
+  GreHead
+}
+
+enum EscalationActionType {
+  Resolved
+  Escalated
+  Contributed
+  Closed
 }
 
 enum QrLoginStatus {

@@ -108,7 +108,9 @@ export const userRoles = [
   'TRAINEE',
   'EXECUTIVE',
   'ASSISTANT',
-  'DEPARTMENT'
+  'DEPARTMENT',
+  'GRE_HEAD',
+  'SERVICE_EXCELLENCE'
 ] as const
 
 export const createUserSchema = z.object({

@@ -134,8 +134,10 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
             <DepartmentMappingTab
               outletId={outlet.id}
               departments={outlet.outlet_departments}
-              departmentUsers={outlet.users.filter(
-                (u) => u.role === 'DEPARTMENT'
+              departmentUsers={outlet.users.filter((u) =>
+                (['DEPARTMENT', 'GRE_HEAD', 'SERVICE_EXCELLENCE'] as const).includes(
+                  u.role as 'DEPARTMENT' | 'GRE_HEAD' | 'SERVICE_EXCELLENCE'
+                )
               )}
               defaultEmailCc={outlet.default_email_cc}
               dashboardUrl={outlet.dashboard_url}

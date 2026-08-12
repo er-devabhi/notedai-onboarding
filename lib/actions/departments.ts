@@ -167,6 +167,15 @@ export async function createDepartmentConfig(
     const hashedPassword = await hashPassword(derivePasswordFromEmail(email))
 
     const config = await prisma.$transaction(async (tx) => {
+      const user = await ensureDepartmentUserAndSubscription(tx, {
+        departmentId,
+        outletId: department.outlet_id,
+        restaurantId: department.outlet.restaurant_id,
+        name,
+        email,
+        hashedPassword,
+      })
+
       const created = await tx.department_config.create({
         data: {
           outlet_department_id: departmentId,
@@ -175,16 +184,8 @@ export async function createDepartmentConfig(
           type: parsed.data.type,
           whatsapp_number: parsed.data.whatsapp_number,
           is_active: parsed.data.is_active,
+          user_id: user.id,
         },
-      })
-
-      await ensureDepartmentUserAndSubscription(tx, {
-        departmentId,
-        outletId: department.outlet_id,
-        restaurantId: department.outlet.restaurant_id,
-        name,
-        email,
-        hashedPassword,
       })
 
       return created
@@ -231,6 +232,16 @@ export async function updateDepartmentConfig(
     const hashedPassword = await hashPassword(derivePasswordFromEmail(newEmail))
 
     const config = await prisma.$transaction(async (tx) => {
+      // Subscribe the (possibly new) contact's user to the department
+      const user = await ensureDepartmentUserAndSubscription(tx, {
+        departmentId,
+        outletId: existing.outlet_department.outlet_id,
+        restaurantId: existing.outlet_department.outlet.restaurant_id,
+        name,
+        email: newEmail,
+        hashedPassword,
+      })
+
       const updated = await tx.department_config.update({
         where: { id },
         data: {
@@ -239,17 +250,8 @@ export async function updateDepartmentConfig(
           type: parsed.data.type,
           whatsapp_number: parsed.data.whatsapp_number,
           is_active: parsed.data.is_active,
+          user_id: user.id,
         },
-      })
-
-      // Subscribe the (possibly new) contact's user to the department
-      await ensureDepartmentUserAndSubscription(tx, {
-        departmentId,
-        outletId: existing.outlet_department.outlet_id,
-        restaurantId: existing.outlet_department.outlet.restaurant_id,
-        name,
-        email: newEmail,
-        hashedPassword,
       })
 
       // If the email changed, drop the old subscription when no other

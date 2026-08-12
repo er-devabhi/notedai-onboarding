@@ -258,17 +258,6 @@ async function createContactWithUser(
     let isNewUser = false
 
     await prisma.$transaction(async (tx) => {
-      await tx.department_config.create({
-        data: {
-          outlet_department_id: departmentId,
-          name: contact.name,
-          email: contact.email,
-          type: contact.type,
-          whatsapp_number: contact.whatsapp_number,
-          is_active: true,
-        },
-      })
-
       let user = await tx.users.findUnique({
         where: { email: contact.email },
         select: { id: true },
@@ -288,6 +277,18 @@ async function createContactWithUser(
         })
         isNewUser = true
       }
+
+      await tx.department_config.create({
+        data: {
+          outlet_department_id: departmentId,
+          name: contact.name,
+          email: contact.email,
+          type: contact.type,
+          whatsapp_number: contact.whatsapp_number,
+          is_active: true,
+          user_id: user.id,
+        },
+      })
 
       await tx.user_department_subscription.upsert({
         where: {
