@@ -67,9 +67,6 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@locator/babel-jsx": "^0.5.1",
-    "@locator/runtime": "^0.5.1",
-    "@locator/webpack-loader": "^0.5.1",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22",
     "@types/react": "^19",

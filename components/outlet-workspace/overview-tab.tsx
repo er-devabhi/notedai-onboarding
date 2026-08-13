@@ -232,7 +232,7 @@ export function OverviewTab({ outlet }: OverviewTabProps) {
             <div className="flex flex-col gap-1">
               <p className="text-sm text-muted-foreground">Created</p>
               <p className="font-medium">
-                {new Date(outlet.created_at).toLocaleDateString()}
+                {new Date(outlet.created_at).toLocaleDateString('en-GB')}
               </p>
             </div>
 
@@ -240,7 +240,7 @@ export function OverviewTab({ outlet }: OverviewTabProps) {
             <div className="flex flex-col gap-1">
               <p className="text-sm text-muted-foreground">Last Updated</p>
               <p className="font-medium">
-                {new Date(outlet.updated_at).toLocaleDateString()}
+                {new Date(outlet.updated_at).toLocaleDateString('en-GB')}
               </p>
             </div>
           </div>

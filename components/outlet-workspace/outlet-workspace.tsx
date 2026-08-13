@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -30,8 +31,40 @@ interface OutletWorkspaceProps {
   outlet: OutletWithRelations
 }
 
+const TAB_VALUES = [
+  'overview',
+  'general',
+  'groups',
+  'tables',
+  'users',
+  'departments',
+  'opd',
+  'passwords',
+  'qr-logins',
+] as const
+
 export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
   const isRestaurant = outlet.restaurant?.organizationType === 'RESTAURANT'
+  const storageKey = `outlet-active-tab-${outlet.id}`
+  const [activeTab, setActiveTab] = useState('overview')
+
+  useEffect(() => {
+    const restrictedTabs = isRestaurant ? new Set(['departments', 'opd']) : new Set()
+    const stored = window.sessionStorage.getItem(storageKey)
+    if (
+      stored &&
+      (TAB_VALUES as readonly string[]).includes(stored) &&
+      !restrictedTabs.has(stored)
+    ) {
+      setActiveTab(stored)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey])
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    window.sessionStorage.setItem(storageKey, value)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,8 +86,9 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="flex flex-col gap-4">
-        <TabsList className="w-full justify-start overflow-x-auto">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col gap-4">
+        <div className="sticky top-16 z-100 -mx-6 bg-background px-6 py-2">
+          <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="overview" className="gap-2">
             <LayoutDashboard className="h-4 w-4" />
             Overview
@@ -95,7 +129,8 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
             <QrCode className="h-4 w-4" />
             QR Logins
           </TabsTrigger>
-        </TabsList>
+          </TabsList>
+        </div>
 
         <TabsContent value="overview">
           <OverviewTab outlet={outlet} />
