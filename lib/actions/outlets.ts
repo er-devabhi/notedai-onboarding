@@ -79,6 +79,9 @@ export async function getOutlet(id: number) {
           table_group: { select: { id: true, name: true } },
         },
       },
+      escalation_level: {
+        orderBy: { sequence: "asc" },
+      },
     },
   });
   return outlet;

@@ -15,6 +15,7 @@ import {
   Network,
   Stethoscope,
   QrCode,
+  ArrowUpNarrowWide,
 } from 'lucide-react'
 import { OverviewTab } from './overview-tab'
 import { GeneralInfoTab } from './general-info-tab'
@@ -25,6 +26,7 @@ import { PasswordTab } from './password-tab'
 import { QrLoginsTab } from './qr-logins-tab'
 import { DepartmentMappingTab } from './department-mapping-tab'
 import { OpdDetailsTab } from './opd-details-tab'
+import { EscalationLevelTab } from './escalation-level-tab'
 import type { OutletWithRelations } from '@/types'
 
 interface OutletWorkspaceProps {
@@ -39,6 +41,7 @@ const TAB_VALUES = [
   'users',
   'departments',
   'opd',
+  'escalation',
   'passwords',
   'qr-logins',
 ] as const
@@ -49,7 +52,9 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
   const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
-    const restrictedTabs = isRestaurant ? new Set(['departments', 'opd']) : new Set()
+    const restrictedTabs = isRestaurant
+      ? new Set(['departments', 'opd', 'escalation'])
+      : new Set()
     const stored = window.sessionStorage.getItem(storageKey)
     if (
       stored &&
@@ -121,6 +126,12 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
               OPD Details
             </TabsTrigger>
           )}
+          {!isRestaurant && (
+            <TabsTrigger value="escalation" className="gap-2">
+              <ArrowUpNarrowWide className="h-4 w-4" />
+              Escalation Level
+            </TabsTrigger>
+          )}
           <TabsTrigger value="passwords" className="gap-2">
             <KeyRound className="h-4 w-4" />
             Passwords
@@ -186,6 +197,15 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
               outletId={outlet.id}
               staffs={outlet.staffs}
               tableGroups={outlet.table_group}
+            />
+          </TabsContent>
+        )}
+
+        {!isRestaurant && (
+          <TabsContent value="escalation">
+            <EscalationLevelTab
+              outletId={outlet.id}
+              levels={outlet.escalation_level}
             />
           </TabsContent>
         )}

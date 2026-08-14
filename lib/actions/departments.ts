@@ -404,6 +404,109 @@ export async function unsubscribeUserFromDepartment(
   }
 }
 
+// ── Bulk map a single user to every department of an outlet ───────────────────
+
+export interface BulkMapResult {
+  mapped: number
+  skipped: number
+  total: number
+}
+
+/**
+ * Maps one existing user to every department of an outlet in one go —
+ * same logic as scripts/map-user-to-all-departments.mjs, exposed as a UI
+ * action instead of a one-off script.
+ */
+export async function bulkMapUserToAllDepartments(
+  outletId: number,
+  userId: string,
+  contactType: 'TO' | 'CC' = 'TO'
+): Promise<ActionResult<BulkMapResult>> {
+  const mappableRoles: UserRole[] = [
+    UserRole.DEPARTMENT,
+    UserRole.GRE_HEAD,
+    UserRole.SERVICE_EXCELLENCE,
+  ]
+
+  try {
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, role: true },
+    })
+    if (!user) {
+      return { success: false, error: 'User not found' }
+    }
+    if (!user.email) {
+      return { success: false, error: 'This user has no email set' }
+    }
+    if (!mappableRoles.includes(user.role)) {
+      return {
+        success: false,
+        error:
+          'Only DEPARTMENT, GRE_HEAD, or SERVICE_EXCELLENCE users can be mapped to departments',
+      }
+    }
+
+    const departments = await prisma.outlet_department.findMany({
+      where: { outlet_id: outletId },
+      orderBy: { name: 'asc' },
+      include: { configs: { select: { email: true } } },
+    })
+
+    const name = (user.name || user.email).trim()
+    const email = user.email.trim().toLowerCase()
+
+    let mapped = 0
+    let skipped = 0
+
+    for (const dept of departments) {
+      const alreadyMapped = dept.configs.some(
+        (c) => c.email.toLowerCase() === email
+      )
+      if (alreadyMapped) {
+        skipped++
+        continue
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.department_config.create({
+          data: {
+            outlet_department_id: dept.id,
+            name,
+            email,
+            type: contactType,
+            whatsapp_number: [],
+            is_active: true,
+            user_id: user.id,
+          },
+        })
+
+        await tx.user_department_subscription.upsert({
+          where: {
+            user_id_outlet_department_id: {
+              user_id: user.id,
+              outlet_department_id: dept.id,
+            },
+          },
+          create: { user_id: user.id, outlet_department_id: dept.id },
+          update: {},
+        })
+      })
+
+      mapped++
+    }
+
+    revalidatePath(`/outlets/${outletId}`)
+    return {
+      success: true,
+      data: { mapped, skipped, total: departments.length },
+    }
+  } catch (error) {
+    console.error('[departments] Error bulk-mapping user to departments:', error)
+    return { success: false, error: 'Failed to map user to departments' }
+  }
+}
+
 // ── Outlet-level notification settings ────────────────────────────────────────
 
 export async function updateOutletNotificationSettings(

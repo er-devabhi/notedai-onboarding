@@ -113,6 +113,43 @@ export const userRoles = [
   'SERVICE_EXCELLENCE'
 ] as const
 
+// Escalation Level validation
+export const escalationLevelSchema = z.object({
+  key: z
+    .string()
+    .min(1, 'Key is required')
+    .max(50)
+    .regex(/^[A-Za-z0-9_-]+$/, 'Key can only contain letters, numbers, - and _'),
+  name: z.string().min(1, 'Name is required').max(255),
+  role: z.nativeEnum(UserRole),
+  sequence: z.number().int().min(0),
+  is_active: z.boolean().default(true),
+  field_config: z
+    .string()
+    .nullable()
+    .refine(
+      (val) => {
+        if (val === null || val.trim() === '') return true
+        try {
+          JSON.parse(val)
+          return true
+        } catch {
+          return false
+        }
+      },
+      { message: 'Must be valid JSON' }
+    ),
+  sla_config: z.object({
+    Low: z.number().int().min(0, 'Must be 0 or greater'),
+    Medium: z.number().int().min(0, 'Must be 0 or greater'),
+    High: z.number().int().min(0, 'Must be 0 or greater'),
+  }),
+})
+
+export type EscalationLevelInput = z.infer<typeof escalationLevelSchema>
+
+export const slaPriorities = ['Low', 'Medium', 'High'] as const
+
 export const createUserSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   email: z.string().email('Valid email required').max(255),

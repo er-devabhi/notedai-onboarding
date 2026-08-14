@@ -1,4 +1,4 @@
-import type { UserRole } from '@prisma/client'
+import type { Prisma, UserRole } from '@prisma/client'
 
 export interface Restaurant {
   id: number
@@ -94,6 +94,20 @@ export interface Staff {
   } | null
 }
 
+export interface EscalationLevel {
+  id: number
+  outlet_id: number
+  key: string
+  name: string
+  role: UserRole
+  sequence: number
+  is_active: boolean
+  created_at: Date
+  updated_at: Date
+  field_config: Prisma.JsonValue | null
+  sla_config: Prisma.JsonValue | null
+}
+
 export interface OutletWithRelations {
   id: number
   name: string
@@ -114,6 +128,7 @@ export interface OutletWithRelations {
   table_group: TableGroup[]
   outlet_departments: OutletDepartment[]
   staffs: Staff[]
+  escalation_level: EscalationLevel[]
 }
 
 export interface SetupStatus {

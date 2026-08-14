@@ -17,6 +17,8 @@ import {
   deleteDepartmentConfig,
   toggleDepartmentConfigActive,
   updateOutletNotificationSettings,
+  bulkMapUserToAllDepartments,
+  type BulkMapResult,
 } from "@/lib/actions/departments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +70,7 @@ import {
   UserPlus,
   Upload,
   RefreshCw,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { OutletDepartment, DepartmentConfig, User } from "@/types";
@@ -205,6 +208,17 @@ export function DepartmentMappingTab({
   const [isDeptCreateOpen, setIsDeptCreateOpen] = useState(false);
   const [isDeptBulkOpen, setIsDeptBulkOpen] = useState(false);
   const [isMappingBulkOpen, setIsMappingBulkOpen] = useState(false);
+
+  // "Map one user to all departments" dialog
+  const [isBulkMapOpen, setIsBulkMapOpen] = useState(false);
+  const [bulkMapRole, setBulkMapRole] =
+    useState<DepartmentMappableRole>("DEPARTMENT");
+  const [bulkMapUserId, setBulkMapUserId] = useState<string>("");
+  const [bulkMapType, setBulkMapType] = useState<"TO" | "CC">("TO");
+  const [bulkMapError, setBulkMapError] = useState<string | null>(null);
+  const [bulkMapResult, setBulkMapResult] = useState<BulkMapResult | null>(
+    null,
+  );
 
   // Add User dialog (new contact for a department)
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -439,6 +453,40 @@ export function DepartmentMappingTab({
     });
   };
 
+  // ── Map one user to all departments ─────────────────────────────────────────
+  const openBulkMapDialog = () => {
+    setBulkMapError(null);
+    setBulkMapResult(null);
+    setBulkMapRole("DEPARTMENT");
+    setBulkMapUserId("");
+    setBulkMapType("TO");
+    setIsBulkMapOpen(true);
+  };
+
+  const handleBulkMap = () => {
+    if (!bulkMapUserId) {
+      setBulkMapError("Please select a user");
+      return;
+    }
+    setBulkMapError(null);
+    setBulkMapResult(null);
+    startTransition(async () => {
+      const result = await bulkMapUserToAllDepartments(
+        outletId,
+        bulkMapUserId,
+        bulkMapType,
+      );
+      if (result.success) {
+        setBulkMapResult(result.data ?? null);
+        router.refresh();
+        toast.success("User mapped to all departments");
+      } else {
+        setBulkMapError(result.error || "Failed to map user");
+        toast.error(result.error || "Failed to map user");
+      }
+    });
+  };
+
   // Users selectable for mapping/editing, scoped to the active role filter
   const roleFilteredUsers =
     roleFilter === "ALL"
@@ -477,6 +525,15 @@ export function DepartmentMappingTab({
 
   const roleFilterLabel =
     ROLE_FILTER_OPTIONS.find((o) => o.value === roleFilter)?.label ?? "";
+
+  // Users selectable in the "map to all departments" dialog, scoped to the
+  // role picked there (independent of the table's roleFilter)
+  const bulkMapAvailableUsers = departmentUsers.filter(
+    (u) => u.role === bulkMapRole && u.email,
+  );
+  const bulkMapSelectedUser = bulkMapAvailableUsers.find(
+    (u) => u.id === bulkMapUserId,
+  );
 
   // Departments with their configs scoped to the active role filter
   const visibleDepartments = departments.map((dept) => ({
@@ -570,6 +627,18 @@ export function DepartmentMappingTab({
                   className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`}
                 />
                 <span className="sr-only">Refresh</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={openBulkMapDialog}
+                disabled={isPending}
+                title="Map one user to all departments"
+              >
+                <Info className="h-4 w-4" />
+                <span className="sr-only">
+                  Map one user to all departments
+                </span>
               </Button>
               <Select
                 value={roleFilter}
@@ -1269,6 +1338,127 @@ export function DepartmentMappingTab({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Map One User to All Departments Dialog */}
+      <Dialog open={isBulkMapOpen} onOpenChange={setIsBulkMapOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Map User to All Departments</DialogTitle>
+            <DialogDescription>
+              Maps the selected user as a contact on every department of
+              this outlet in one go, skipping departments where they&apos;re
+              already mapped.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-2">
+              <Label>Role</Label>
+              <Select
+                value={bulkMapRole}
+                onValueChange={(v) => {
+                  setBulkMapRole(v as DepartmentMappableRole);
+                  setBulkMapUserId("");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLE_FILTER_OPTIONS.filter((o) => o.value !== "ALL").map(
+                    (o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label>User</Label>
+              <Select value={bulkMapUserId} onValueChange={setBulkMapUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a user" />
+                </SelectTrigger>
+                <SelectContent>
+                  {bulkMapAvailableUsers.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      No {bulkMapRole.replace(/_/g, " ")} users found
+                    </div>
+                  ) : (
+                    bulkMapAvailableUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name || "Unnamed User"}
+                        {u.email ? ` — ${u.email}` : ""}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label>Contact Type</Label>
+              <Select
+                value={bulkMapType}
+                onValueChange={(v) => setBulkMapType(v as "TO" | "CC")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TO">TO (primary recipient)</SelectItem>
+                  <SelectItem value="CC">CC (copied)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {bulkMapSelectedUser && (
+              <p className="text-xs text-muted-foreground">
+                Will add {bulkMapSelectedUser.name || bulkMapSelectedUser.email}{" "}
+                as a {bulkMapType} contact on every department not already
+                mapped to {bulkMapSelectedUser.email}.
+              </p>
+            )}
+
+            {bulkMapError && (
+              <p className="text-sm text-destructive">{bulkMapError}</p>
+            )}
+            {bulkMapResult && (
+              <p className="text-sm text-green-600">
+                Mapped {bulkMapResult.mapped} department
+                {bulkMapResult.mapped !== 1 ? "s" : ""}, skipped{" "}
+                {bulkMapResult.skipped} already-mapped (of{" "}
+                {bulkMapResult.total} total).
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsBulkMapOpen(false)}
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={handleBulkMap}
+              disabled={isPending || !bulkMapUserId}
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Mapping...
+                </>
+              ) : (
+                "Map to All Departments"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
