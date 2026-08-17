@@ -71,6 +71,7 @@ import {
   Upload,
   RefreshCw,
   Info,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { OutletDepartment, DepartmentConfig, User } from "@/types";
@@ -239,6 +240,9 @@ export function DepartmentMappingTab({
 
   // Role filter for the department configuration table
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
+
+  // Client-side search: matches department name, or contact name/email
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Notification settings local state
   const [ccEmails, setCcEmails] = useState<string[]>(defaultEmailCc);
@@ -535,14 +539,39 @@ export function DepartmentMappingTab({
     (u) => u.id === bulkMapUserId,
   );
 
-  // Departments with their configs scoped to the active role filter
-  const visibleDepartments = departments.map((dept) => ({
-    ...dept,
-    visibleConfigs:
-      roleFilter === "ALL"
-        ? dept.configs
-        : dept.configs.filter((c) => c.users?.role === roleFilter),
-  }));
+  // Departments with their configs scoped to the active role filter and,
+  // when set, the search query (matches department name, or contact name/email)
+  const searchQueryNormalized = searchQuery.trim().toLowerCase();
+  const visibleDepartments = departments
+    .map((dept) => {
+      const roleFilteredConfigs =
+        roleFilter === "ALL"
+          ? dept.configs
+          : dept.configs.filter((c) => c.users?.role === roleFilter);
+
+      const deptNameMatches = searchQueryNormalized
+        ? dept.name.toLowerCase().includes(searchQueryNormalized)
+        : true;
+
+      // A department-name match shows all of its (role-filtered) contacts;
+      // otherwise, only contacts whose name/email match the search remain.
+      const visibleConfigs =
+        !searchQueryNormalized || deptNameMatches
+          ? roleFilteredConfigs
+          : roleFilteredConfigs.filter(
+              (c) =>
+                c.name.toLowerCase().includes(searchQueryNormalized) ||
+                c.email.toLowerCase().includes(searchQueryNormalized),
+            );
+
+      return { ...dept, visibleConfigs, deptNameMatches };
+    })
+    .filter(
+      (dept) =>
+        !searchQueryNormalized ||
+        dept.deptNameMatches ||
+        dept.visibleConfigs.length > 0,
+    );
 
   const totalContacts = visibleDepartments.reduce(
     (sum, d) => sum + d.visibleConfigs.length,
@@ -616,6 +645,15 @@ export function DepartmentMappingTab({
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search department, user, or email"
+                  className="w-64 pl-8"
+                />
+              </div>
               <Button
                 variant="outline"
                 size="icon"
