@@ -26,6 +26,7 @@ model users {
   notifications                notifications[]
   post_discharge_feedback_form post_discharge_feedback_form[]
   qr_login                     qr_login[]
+  scanned_doc                  scanned_doc[]
   support_ticket               support_ticket[]
   department_subscriptions     user_department_subscription[]
   outlet                       outlet?                        @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -75,6 +76,7 @@ model outlet {
   patient_autocomplete         patient_autocomplete[]
   post_discharge_feedback_form post_discharge_feedback_form[]
   qr_login                     qr_login[]
+  scanned_doc                  scanned_doc[]
   staffs                       staffs[]
   support_ticket               support_ticket[]
   tables                       table[]
@@ -836,6 +838,33 @@ model qr_login {
   @@index([user_id])
 }
 
+model scanned_doc {
+  id               Int                @id @default(autoincrement())
+  outletId         Int
+  userId           String             @db.Uuid
+  status           ScannedDocStatus   @default(Pending)
+  pageCount        Int
+  ocrResult        Json?
+  isSuccess        Boolean?           @default(false)
+  retryCount       Int?               @default(0)
+  errorMessage     String?
+  createdAt        DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime           @db.Timestamptz(6)
+  outlet           outlet             @relation(fields: [outletId], references: [id], onDelete: NoAction)
+  users            users              @relation(fields: [userId], references: [id], onDelete: NoAction)
+  scanned_doc_page scanned_doc_page[]
+}
+
+model scanned_doc_page {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scannedDocId Int
+  url          String
+  pageOrder    Int
+  ocrText      Json?
+  createdAt    DateTime    @default(now()) @db.Timestamptz(6)
+  scanned_doc  scanned_doc @relation(fields: [scannedDocId], references: [id], onDelete: Cascade)
+}
+
 enum UserRole {
   ADMIN
   MANAGER
@@ -1002,4 +1031,11 @@ enum QrLoginStatus {
   ACTIVE
   EXPIRED
   REVOKED
+}
+
+enum ScannedDocStatus {
+  Pending
+  Processing
+  Completed
+  Failed
 }
