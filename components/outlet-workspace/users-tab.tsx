@@ -45,7 +45,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Plus, Pencil, Eye, EyeOff, Upload } from 'lucide-react'
+import { Loader2, Plus, Pencil, Eye, EyeOff, Upload, Search } from 'lucide-react'
 import { BulkUploadUsersDialog } from './bulk-upload-users-dialog'
 import type { User } from '@/types'
 
@@ -84,16 +84,27 @@ export function UsersTab({
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [showPassword, setShowPassword] = useState(false)
-  const [roleFilter, setRoleFilter] = useState<'team' | 'department'>('team')
+  const [roleFilter, setRoleFilter] = useState<string>('ALL')
+  const [search, setSearch] = useState('')
   const [isBulkOpen, setIsBulkOpen] = useState(false)
 
-  const departmentCount = users.filter((u) => u.role === 'DEPARTMENT').length
-  const teamCount = users.length - departmentCount
-  const filteredUsers = users.filter((u) =>
-    showDepartmentUsers && roleFilter === 'department'
-      ? u.role === 'DEPARTMENT'
-      : u.role !== 'DEPARTMENT'
-  )
+  const visibleUsers = showDepartmentUsers
+    ? users
+    : users.filter((u) => u.role !== 'DEPARTMENT')
+
+  const availableRoles = Array.from(
+    new Set(visibleUsers.map((u) => u.role))
+  ).sort()
+
+  const searchQuery = search.trim().toLowerCase()
+  const filteredUsers = visibleUsers
+    .filter((u) => roleFilter === 'ALL' || u.role === roleFilter)
+    .filter((u) =>
+      searchQuery
+        ? (u.name || '').toLowerCase().includes(searchQuery) ||
+          (u.email || '').toLowerCase().includes(searchQuery)
+        : true
+    )
 
   const createForm = useForm<CreateUserInput>({
     resolver: zodResolver(createUserSchema),
@@ -195,7 +206,10 @@ export function UsersTab({
                   name: '',
                   email: '',
                   password: '',
-                  role: roleFilter === 'department' ? 'DEPARTMENT' : 'MANAGER',
+                  role:
+                    roleFilter !== 'ALL'
+                      ? (roleFilter as typeof userRoles[number])
+                      : 'MANAGER',
                 })
               }
             }}
@@ -287,7 +301,6 @@ export function UsersTab({
                       onValueChange={(value) =>
                         createForm.setValue('role', value as typeof userRoles[number])
                       }
-                      disabled={roleFilter === 'department'}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -300,11 +313,6 @@ export function UsersTab({
                         ))}
                       </SelectContent>
                     </Select>
-                    {roleFilter === 'department' && (
-                      <p className="text-xs text-muted-foreground">
-                        Role is locked to DEPARTMENT on this tab
-                      </p>
-                    )}
                   </div>
 
                   {error && (
@@ -337,37 +345,44 @@ export function UsersTab({
         </div>
       </CardHeader>
       <CardContent>
-        {/* Role filter */}
-        {showDepartmentUsers && (
-          <div className="mb-4 inline-flex rounded-lg border p-1">
-            <Button
-              variant={roleFilter === 'team' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setRoleFilter('team')}
-            >
-              Team Users ({teamCount})
-            </Button>
-            <Button
-              variant={roleFilter === 'department' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setRoleFilter('department')}
-            >
-              Department Users ({departmentCount})
-            </Button>
+        {/* Role filter + search */}
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="All Roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Roles ({visibleUsers.length})</SelectItem>
+              {availableRoles.map((role) => (
+                <SelectItem key={role} value={role}>
+                  {role.replace(/_/g, ' ')} (
+                  {visibleUsers.filter((u) => u.role === role).length})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or email"
+              className="pl-8"
+            />
           </div>
-        )}
+        </div>
 
         {filteredUsers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground">
-              {roleFilter === 'department'
-                ? 'No department users yet'
-                : 'No team users assigned yet'}
+              {visibleUsers.length === 0
+                ? 'No users assigned yet'
+                : 'No users match your filters'}
             </p>
             <p className="text-sm text-muted-foreground">
-              {roleFilter === 'department'
-                ? 'Department users are created automatically when you add department contacts'
-                : 'Add users to manage this outlet'}
+              {visibleUsers.length === 0
+                ? 'Add users to manage this outlet'
+                : 'Try a different role or search term'}
             </p>
           </div>
         ) : (
