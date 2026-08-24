@@ -92,7 +92,7 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col gap-4">
-        <div className="sticky top-16 z-100 -mx-6 bg-background px-6 py-2">
+        <div className="sticky top-16 z-20 -mx-6 bg-background px-6 py-2">
           <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="overview" className="gap-2">
             <LayoutDashboard className="h-4 w-4" />

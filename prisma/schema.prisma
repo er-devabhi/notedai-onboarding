@@ -8,29 +8,31 @@ datasource db {
 }
 
 model users {
-  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
-  name                         String?                        @db.VarChar
-  email                        String?                        @unique @db.VarChar
-  password                     String?                        @db.VarChar
-  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  restaurant_id                Int?
-  outlet_id                    Int?
-  updated_at                   DateTime                       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  role                         UserRole                       @default(MANAGER)
-  audio_files                  audio_files[]
-  conversation                 conversation[]
-  daily_targets                daily_targets[]
-  department_config            department_config[]
-  devices                      devices[]
-  in_patient_feedback_form     in_patient_feedback_form[]
-  notifications                notifications[]
-  post_discharge_feedback_form post_discharge_feedback_form[]
-  qr_login                     qr_login[]
-  scanned_doc                  scanned_doc[]
-  support_ticket               support_ticket[]
-  department_subscriptions     user_department_subscription[]
-  outlet                       outlet?                        @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  restaurants                  restaurants?                   @relation(fields: [restaurant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_at                                            DateTime                       @default(now()) @db.Timestamptz(6)
+  name                                                  String?                        @db.VarChar
+  email                                                 String?                        @unique @db.VarChar
+  password                                              String?                        @db.VarChar
+  id                                                    String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurant_id                                         Int?
+  outlet_id                                             Int?
+  updated_at                                            DateTime                       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  role                                                  UserRole                       @default(MANAGER)
+  audio_files                                           audio_files[]
+  conversation                                          conversation[]
+  daily_targets                                         daily_targets[]
+  department_config                                     department_config[]
+  devices                                               devices[]
+  in_patient_feedback_form                              in_patient_feedback_form[]
+  notifications                                         notifications[]
+  nursing_handover_nursing_handover_from_user_idTousers nursing_handover[]             @relation("nursing_handover_from_user_idTousers")
+  nursing_handover_nursing_handover_to_user_idTousers   nursing_handover[]             @relation("nursing_handover_to_user_idTousers")
+  post_discharge_feedback_form                          post_discharge_feedback_form[]
+  qr_login                                              qr_login[]
+  scanned_doc                                           scanned_doc[]
+  support_ticket                                        support_ticket[]
+  department_subscriptions                              user_department_subscription[]
+  outlet                                                outlet?                        @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  restaurants                                           restaurants?                   @relation(fields: [restaurant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([id])
 }
@@ -70,6 +72,7 @@ model outlet {
   hospital_patient             hospital_patient[]
   hospital_patient_comment     hospital_patient_comment[]
   in_patient_feedback_form     in_patient_feedback_form[]
+  nursing_handover             nursing_handover[]
   restaurant                   restaurants                    @relation(fields: [restaurant_id], references: [id])
   outlet_departments           outlet_department[]
   patient                      patient[]
@@ -143,20 +146,21 @@ model table_group {
 }
 
 model table {
-  id               Int               @id @default(autoincrement())
-  table_no         String            @db.VarChar
+  id               Int                @id @default(autoincrement())
+  table_no         String             @db.VarChar
   outlet_id        Int
   capacity         Int?
-  resourceId       String?           @unique
-  created_at       DateTime          @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  active           Boolean           @default(true)
-  order            Int               @default(0)
+  resourceId       String?            @unique
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  active           Boolean            @default(true)
+  order            Int                @default(0)
   group_id         Int?
   conversation     conversation[]
+  nursing_handover nursing_handover[]
   qr_code_feedback qr_code_feedback?
-  group            table_group?      @relation(fields: [group_id], references: [id])
-  outlet           outlet            @relation(fields: [outlet_id], references: [id])
+  group            table_group?       @relation(fields: [group_id], references: [id])
+  outlet           outlet             @relation(fields: [outlet_id], references: [id])
 
   @@unique([table_no, outlet_id, group_id])
 }
@@ -180,18 +184,20 @@ model admission {
 }
 
 model audio_files {
-  created_at       DateTime      @default(now()) @db.Timestamptz(6)
-  url              String?
-  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  conversation_id  String?       @db.Uuid
-  is_success       Boolean?      @default(false)
-  uploaded_by      String?       @db.Uuid
-  updated_at       DateTime      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  metadata         Json?
-  type             AudioFileType @default(Feedback)
-  demucs_audio_url String?
-  conversation     conversation? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  users            users?        @relation(fields: [uploaded_by], references: [id], onDelete: NoAction)
+  created_at          DateTime          @default(now()) @db.Timestamptz(6)
+  url                 String?
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id     String?           @db.Uuid
+  is_success          Boolean?          @default(false)
+  uploaded_by         String?           @db.Uuid
+  updated_at          DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  metadata            Json?
+  type                AudioFileType     @default(Feedback)
+  demucs_audio_url    String?
+  nursing_handover_id String?           @db.Uuid
+  conversation        conversation?     @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  nursing_handover    nursing_handover? @relation(fields: [nursing_handover_id], references: [id], onDelete: Cascade)
+  users               users?            @relation(fields: [uploaded_by], references: [id], onDelete: NoAction)
 }
 
 model bbq_branches {
@@ -745,16 +751,17 @@ model hospital_escalation_group {
 }
 
 model patient_autocomplete {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name         String?
-  uhid         String?
-  phone_number String?
-  age          Int?
-  gender       String?
-  created_at   DateTime @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  outlet_id    Int?
-  outlet       outlet?  @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String?
+  uhid             String?
+  phone_number     String?
+  age              Int?
+  gender           String?
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  outlet_id        Int?
+  nursing_handover nursing_handover[]
+  outlet           outlet?            @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
 
   @@index([name])
   @@index([phone_number])
@@ -865,6 +872,48 @@ model scanned_doc_page {
   scanned_doc  scanned_doc @relation(fields: [scannedDocId], references: [id], onDelete: Cascade)
 }
 
+model nursing_handover {
+  id                                         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outlet_id                                  Int
+  from_user_id                               String                @db.Uuid
+  to_user_id                                 String?               @db.Uuid
+  from_user_name                             String?
+  to_user_name                               String?
+  table_id                                   Int?
+  bed_number                                 String?
+  table_group_name                           String?
+  patient_name                               String?
+  patient_uhid                               String?
+  patient_autocomplete_id                    String?               @db.Uuid
+  previous_handover_id                       String?               @db.Uuid
+  status                                     NursingHandoverStatus @default(Pending)
+  is_success                                 Boolean?              @default(false)
+  retry_count                                Int?                  @default(0)
+  error_message                              String?
+  transcript                                 Json?
+  analysis                                   Json?
+  context                                    Json?
+  notes                                      String?
+  metadata                                   Json?
+  usage                                      Json?
+  is_offline                                 Boolean               @default(false)
+  offline_created_at                         DateTime?             @db.Timestamptz(6)
+  created_at                                 DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                                 DateTime              @db.Timestamptz(6)
+  audio_files                                audio_files[]
+  users_nursing_handover_from_user_idTousers users                 @relation("nursing_handover_from_user_idTousers", fields: [from_user_id], references: [id], onDelete: NoAction)
+  outlet                                     outlet                @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
+  patient_autocomplete                       patient_autocomplete? @relation(fields: [patient_autocomplete_id], references: [id])
+  nursing_handover                           nursing_handover?     @relation("nursing_handoverTonursing_handover", fields: [previous_handover_id], references: [id])
+  other_nursing_handover                     nursing_handover[]    @relation("nursing_handoverTonursing_handover")
+  table                                      table?                @relation(fields: [table_id], references: [id])
+  users_nursing_handover_to_user_idTousers   users?                @relation("nursing_handover_to_user_idTousers", fields: [to_user_id], references: [id], onDelete: NoAction)
+
+  @@index([outlet_id, patient_uhid, created_at])
+  @@index([outlet_id, table_id, created_at])
+  @@index([status])
+}
+
 enum UserRole {
   ADMIN
   MANAGER
@@ -884,6 +933,7 @@ enum UserRole {
   SERVICE_RECOVERY
   SERVICE_EXCELLENCE
   GRE_HEAD
+  NURSE
 }
 
 enum OrganizationType {
@@ -900,6 +950,7 @@ enum AudioFileType {
   Feedback
   QrCodeFeedback
   RcaCapa
+  NurseHandover
 }
 
 enum ConversationType {
@@ -1034,6 +1085,13 @@ enum QrLoginStatus {
 }
 
 enum ScannedDocStatus {
+  Pending
+  Processing
+  Completed
+  Failed
+}
+
+enum NursingHandoverStatus {
   Pending
   Processing
   Completed
