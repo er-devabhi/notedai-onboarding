@@ -8,29 +8,33 @@ datasource db {
 }
 
 model users {
-  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
-  name                         String?                        @db.VarChar
-  email                        String?                        @unique @db.VarChar
-  password                     String?                        @db.VarChar
-  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  restaurant_id                Int?
-  outlet_id                    Int?
-  updated_at                   DateTime                       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  role                         UserRole                       @default(MANAGER)
-  audio_files                  audio_files[]
-  conversation                 conversation[]
-  daily_targets                daily_targets[]
-  department_config            department_config[]
-  devices                      devices[]
-  in_patient_feedback_form     in_patient_feedback_form[]
-  notifications                notifications[]
-  post_discharge_feedback_form post_discharge_feedback_form[]
-  qr_login                     qr_login[]
-  scanned_doc                  scanned_doc[]
-  support_ticket               support_ticket[]
-  department_subscriptions     user_department_subscription[]
-  outlet                       outlet?                        @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  restaurants                  restaurants?                   @relation(fields: [restaurant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_at                                            DateTime                       @default(now()) @db.Timestamptz(6)
+  name                                                  String?                        @db.VarChar
+  email                                                 String?                        @unique @db.VarChar
+  password                                              String?                        @db.VarChar
+  id                                                    String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurant_id                                         Int?
+  outlet_id                                             Int?
+  updated_at                                            DateTime                       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  role                                                  UserRole                       @default(MANAGER)
+  audio_files                                           audio_files[]
+  conversation                                          conversation[]
+  daily_targets                                         daily_targets[]
+  department_config                                     department_config[]
+  devices                                               devices[]
+  in_patient_feedback_form                              in_patient_feedback_form[]
+  notifications                                         notifications[]
+  nursing_handover_nursing_handover_from_user_idTousers nursing_handover[]             @relation("nursing_handover_from_user_idTousers")
+  nursing_handover_nursing_handover_to_user_idTousers   nursing_handover[]             @relation("nursing_handover_to_user_idTousers")
+  post_discharge_feedback_form                          post_discharge_feedback_form[]
+  qr_login                                              qr_login[]
+  rca_capa_analysis                                     rca_capa_analysis[]
+  rca_capa_media                                        rca_capa_media[]
+  scanned_doc                                           scanned_doc[]
+  support_ticket                                        support_ticket[]
+  department_subscriptions                              user_department_subscription[]
+  outlet                                                outlet?                        @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  restaurants                                           restaurants?                   @relation(fields: [restaurant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([id])
 }
@@ -70,12 +74,15 @@ model outlet {
   hospital_patient             hospital_patient[]
   hospital_patient_comment     hospital_patient_comment[]
   in_patient_feedback_form     in_patient_feedback_form[]
+  nursing_handover             nursing_handover[]
   restaurant                   restaurants                    @relation(fields: [restaurant_id], references: [id])
   outlet_departments           outlet_department[]
   patient                      patient[]
   patient_autocomplete         patient_autocomplete[]
   post_discharge_feedback_form post_discharge_feedback_form[]
   qr_login                     qr_login[]
+  rca_capa_analysis            rca_capa_analysis[]
+  rca_capa_media               rca_capa_media[]
   scanned_doc                  scanned_doc[]
   staffs                       staffs[]
   support_ticket               support_ticket[]
@@ -143,20 +150,21 @@ model table_group {
 }
 
 model table {
-  id               Int               @id @default(autoincrement())
-  table_no         String            @db.VarChar
+  id               Int                @id @default(autoincrement())
+  table_no         String             @db.VarChar
   outlet_id        Int
   capacity         Int?
-  resourceId       String?           @unique
-  created_at       DateTime          @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  active           Boolean           @default(true)
-  order            Int               @default(0)
+  resourceId       String?            @unique
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  active           Boolean            @default(true)
+  order            Int                @default(0)
   group_id         Int?
   conversation     conversation[]
+  nursing_handover nursing_handover[]
   qr_code_feedback qr_code_feedback?
-  group            table_group?      @relation(fields: [group_id], references: [id])
-  outlet           outlet            @relation(fields: [outlet_id], references: [id])
+  group            table_group?       @relation(fields: [group_id], references: [id])
+  outlet           outlet             @relation(fields: [outlet_id], references: [id])
 
   @@unique([table_no, outlet_id, group_id])
 }
@@ -180,30 +188,22 @@ model admission {
 }
 
 model audio_files {
-  created_at       DateTime      @default(now()) @db.Timestamptz(6)
-  url              String?
-  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  conversation_id  String?       @db.Uuid
-  is_success       Boolean?      @default(false)
-  uploaded_by      String?       @db.Uuid
-  updated_at       DateTime      @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  metadata         Json?
-  type             AudioFileType @default(Feedback)
-  demucs_audio_url String?
-  conversation     conversation? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  users            users?        @relation(fields: [uploaded_by], references: [id], onDelete: NoAction)
-}
-
-model bbq_branches {
-  id               Int      @id @default(autoincrement())
-  branch_name      String?
-  city_name        String?
-  address          String?
-  phone_number     String?
-  branch_alias     String?
-  branch_image_url String?
-  created_at       DateTime @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  created_at           DateTime           @default(now()) @db.Timestamptz(6)
+  url                  String?
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id      String?            @db.Uuid
+  is_success           Boolean?           @default(false)
+  uploaded_by          String?            @db.Uuid
+  updated_at           DateTime           @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  metadata             Json?
+  type                 AudioFileType      @default(Feedback)
+  demucs_audio_url     String?
+  nursing_handover_id  String?            @db.Uuid
+  rca_capa_analysis_id String?            @db.Uuid
+  conversation         conversation?      @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  nursing_handover     nursing_handover?  @relation(fields: [nursing_handover_id], references: [id], onDelete: Cascade)
+  rca_capa_analysis    rca_capa_analysis? @relation(fields: [rca_capa_analysis_id], references: [id])
+  users                users?             @relation(fields: [uploaded_by], references: [id], onDelete: NoAction)
 }
 
 model bed_allocation {
@@ -219,12 +219,6 @@ model bed_allocation {
   conversation         conversation[]
 
   @@index([admission_id, from_time])
-}
-
-model city_wise_urls {
-  id              Int     @id @default(autoincrement())
-  city_name       String?
-  City_Wise_URL_s String? @map("City-Wise URL's")
 }
 
 model conversation {
@@ -307,6 +301,10 @@ model conversation {
   hospital_patient_request              hospital_patient_request[]
 
   @@index([id])
+  @@index([outlet_id, is_success, created_at])
+  @@index([outlet_id, tableName, offline_created_at])
+  @@index([outlet_id, table_id, offline_created_at])
+  @@index([outlet_id, user_id, is_success, created_at])
 }
 
 model dashboard_page_sessions {
@@ -396,6 +394,7 @@ model hospital_issue_ticket {
   post_discharge_feedback_form post_discharge_feedback_form? @relation(fields: [post_discharge_feedback_id], references: [id], onDelete: Cascade)
 
   @@index([escalation_group_id])
+  @@index([conversation_id])
 }
 
 model hospital_patient {
@@ -589,57 +588,6 @@ model qr_code_feedback {
   table    table  @relation(fields: [table_id], references: [id], onDelete: Cascade)
 }
 
-model role_play_evaluation {
-  id                        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at                DateTime @default(now()) @db.Timestamptz(6)
-  updated_at                DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  redFlags                  Json
-  sopAdherenceTag           String
-  sopAdherenceNote          String
-  sopSteps                  Json
-  communicationClarityTag   String
-  communicationClarityNote  String
-  confidenceTag             String
-  confidenceNote            String
-  empathyTag                String
-  empathyNote               String
-  activeListeningTag        String
-  activeListeningNote       String
-  pressureObjectionLevel    String
-  pressureObjectionTag      String
-  pressureObjectionNote     String
-  pressureObjectionEvidence String?
-  learningBehaviorTag       String
-  learningBehaviorNote      String
-  alternatesSolutions       Json
-  strengths                 String[]
-  weaknesses                String[]
-
-  @@index([created_at])
-}
-
-model scenario {
-  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name             String
-  created_at       DateTime           @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime           @db.Timestamptz(6)
-  description      String?
-  scenario_prompts scenario_prompts[]
-}
-
-model scenario_prompts {
-  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  type                   PromptType
-  voice_prompt           String?
-  evaluatlion_prompt     String?
-  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime                 @db.Timestamptz(6)
-  scenarioId             String?                  @db.Uuid
-  model_configuration    Json?
-  scenario               scenario?                @relation(fields: [scenarioId], references: [id])
-  transcription_analysis transcription_analysis[]
-}
-
 model staffs {
   id          Int          @id @default(autoincrement())
   name        String
@@ -667,51 +615,6 @@ model support_ticket {
   users       users        @relation(fields: [userId], references: [id], onDelete: NoAction)
 }
 
-model transcription_analysis {
-  id                                                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  transcription                                      Json?
-  analysis                                           Json?
-  analysis_usage                                     Json?
-  created_at                                         DateTime          @default(now()) @db.Timestamptz(6)
-  updated_at                                         DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  sop_overall_violations_or_red_flags                Json?
-  sop_overall_help_or_coaching_intensity_level       String?
-  sop_overall_initially_before_coaching_level        String?
-  sop_overall_initially_before_coaching_note         String?
-  sop_overall_after_coaching_level                   String?
-  sop_overall_after_coaching_note                    String?
-  sop_overall_initial_communication_and_clarity_note String?
-  sop_overall_customer_impact_initial_outcome        String?
-  sop_overall_customer_impact_initial_note           String?
-  sop_overall_logical_order_initial_status           String?
-  sop_overall_logical_order_initial_note             String?
-  sop_overall_final_communication_and_clarity_note   String?
-  sop_overall_customer_impact_final_outcome          String?
-  sop_overall_customer_impact_final_note             String?
-  sop_overall_logical_order_final_status             String?
-  sop_overall_logical_order_final_note               String?
-  sop_overall_learning_behavior_status               String?
-  sop_overall_learning_behavior_note                 String?
-  sop_overall_strengths                              String[]
-  sop_overall_weaknesses                             String[]
-  sop_steps                                          Json?
-  scenario_prompt_id                                 String?           @db.Uuid
-  audio_url                                          String?
-  scenario_prompts                                   scenario_prompts? @relation(fields: [scenario_prompt_id], references: [id])
-}
-
-model wrappers_fdw_stats {
-  fdw_name     String   @id
-  create_times BigInt?
-  rows_in      BigInt?
-  rows_out     BigInt?
-  bytes_in     BigInt?
-  bytes_out    BigInt?
-  metadata     Json?
-  created_at   DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  updated_at   DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-}
-
 model hospital_escalation_group {
   title                 String?
   description           String?
@@ -737,6 +640,8 @@ model hospital_escalation_group {
   escalation_level      escalation_level?       @relation(fields: [current_level_id], references: [id])
   outlet                outlet                  @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
   hospital_issue_ticket hospital_issue_ticket[]
+  rca_capa_analysis     rca_capa_analysis[]
+  rca_capa_media        rca_capa_media[]
 
   @@index([department])
   @@index([outlet_id])
@@ -745,16 +650,17 @@ model hospital_escalation_group {
 }
 
 model patient_autocomplete {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name         String?
-  uhid         String?
-  phone_number String?
-  age          Int?
-  gender       String?
-  created_at   DateTime @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  outlet_id    Int?
-  outlet       outlet?  @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String?
+  uhid             String?
+  phone_number     String?
+  age              Int?
+  gender           String?
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  outlet_id        Int?
+  nursing_handover nursing_handover[]
+  outlet           outlet?            @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
 
   @@index([name])
   @@index([phone_number])
@@ -762,14 +668,16 @@ model patient_autocomplete {
 }
 
 model daily_targets {
-  id              Int      @id @default(autoincrement())
-  user_id         String?  @db.Uuid
-  department_name String?
-  target_date     DateTime @db.Date
-  target_count    Int
-  created_at      DateTime @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime @default(now()) @db.Timestamptz(6)
-  users           users?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                       Int      @id @default(autoincrement())
+  user_id                  String?  @db.Uuid
+  department_name          String?
+  target_date              DateTime @db.Date
+  target_count             Int
+  created_at               DateTime @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime @default(now()) @db.Timestamptz(6)
+  critical_department_name String?
+  critical_target_count    Int      @default(0)
+  users                    users?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, target_date])
 }
@@ -865,6 +773,96 @@ model scanned_doc_page {
   scanned_doc  scanned_doc @relation(fields: [scannedDocId], references: [id], onDelete: Cascade)
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model nursing_handover {
+  id                                         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outlet_id                                  Int
+  from_user_id                               String                @db.Uuid
+  to_user_id                                 String?               @db.Uuid
+  from_user_name                             String?
+  to_user_name                               String?
+  table_id                                   Int?
+  bed_number                                 String?
+  table_group_name                           String?
+  patient_name                               String?
+  patient_uhid                               String?
+  patient_autocomplete_id                    String?               @db.Uuid
+  previous_handover_id                       String?               @db.Uuid
+  status                                     NursingHandoverStatus @default(Pending)
+  is_success                                 Boolean?              @default(false)
+  retry_count                                Int?                  @default(0)
+  error_message                              String?
+  transcript                                 Json?
+  analysis                                   Json?
+  context                                    Json?
+  notes                                      String?
+  metadata                                   Json?
+  usage                                      Json?
+  is_offline                                 Boolean               @default(false)
+  offline_created_at                         DateTime?             @db.Timestamptz(6)
+  created_at                                 DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                                 DateTime              @db.Timestamptz(6)
+  audio_files                                audio_files[]
+  users_nursing_handover_from_user_idTousers users                 @relation("nursing_handover_from_user_idTousers", fields: [from_user_id], references: [id], onDelete: NoAction)
+  outlet                                     outlet                @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
+  patient_autocomplete                       patient_autocomplete? @relation(fields: [patient_autocomplete_id], references: [id])
+  nursing_handover                           nursing_handover?     @relation("nursing_handoverTonursing_handover", fields: [previous_handover_id], references: [id])
+  other_nursing_handover                     nursing_handover[]    @relation("nursing_handoverTonursing_handover")
+  table                                      table?                @relation(fields: [table_id], references: [id])
+  users_nursing_handover_to_user_idTousers   users?                @relation("nursing_handover_to_user_idTousers", fields: [to_user_id], references: [id], onDelete: NoAction)
+
+  @@index([outlet_id, patient_uhid, created_at])
+  @@index([outlet_id, table_id, created_at])
+  @@index([status])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model rca_capa_analysis {
+  id                        String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  escalation_group_id       Int
+  outlet_id                 Int
+  requested_by              String                    @db.Uuid
+  status                    RcaCapaAnalysisStatus     @default(Pending)
+  is_success                Boolean?                  @default(false)
+  retry_count               Int?                      @default(0)
+  error_message             String?
+  transcript                Json?
+  analysis                  Json?
+  context                   Json?
+  usage                     Json?
+  metadata                  Json?
+  submitted_at              DateTime?                 @db.Timestamptz(6)
+  started_at                DateTime?                 @db.Timestamptz(6)
+  completed_at              DateTime?                 @db.Timestamptz(6)
+  created_at                DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                  @db.Timestamptz(6)
+  audio_files               audio_files[]
+  hospital_escalation_group hospital_escalation_group @relation(fields: [escalation_group_id], references: [id], onDelete: Cascade)
+  outlet                    outlet                    @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+  users                     users                     @relation(fields: [requested_by], references: [id], onDelete: NoAction)
+
+  @@index([escalation_group_id, created_at])
+  @@index([requested_by, created_at])
+  @@index([status])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model rca_capa_media {
+  id                        String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  escalation_group_id       Int
+  outlet_id                 Int
+  uploaded_by               String                    @db.Uuid
+  media_type                RcaCapaMediaType
+  url                       String
+  content_type              String?
+  created_at                DateTime                  @default(now()) @db.Timestamptz(6)
+  hospital_escalation_group hospital_escalation_group @relation(fields: [escalation_group_id], references: [id], onDelete: Cascade)
+  outlet                    outlet                    @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
+  users                     users                     @relation(fields: [uploaded_by], references: [id], onDelete: NoAction)
+
+  @@index([escalation_group_id, created_at])
+}
+
 enum UserRole {
   ADMIN
   MANAGER
@@ -884,6 +882,7 @@ enum UserRole {
   SERVICE_RECOVERY
   SERVICE_EXCELLENCE
   GRE_HEAD
+  NURSE
 }
 
 enum OrganizationType {
@@ -900,6 +899,7 @@ enum AudioFileType {
   Feedback
   QrCodeFeedback
   RcaCapa
+  NurseHandover
 }
 
 enum ConversationType {
@@ -980,16 +980,6 @@ enum NotificationType {
   ANNOUNCEMENT
 }
 
-enum PromptType {
-  Teaching
-  Testing
-  Roleplay
-  Coaching
-  Mock
-  Demo
-  RoleplayDifficult
-}
-
 enum PushPlatform {
   ANDROID
   IOS
@@ -1038,4 +1028,24 @@ enum ScannedDocStatus {
   Processing
   Completed
   Failed
+}
+
+enum NursingHandoverStatus {
+  Pending
+  Processing
+  Completed
+  Failed
+}
+
+enum RcaCapaAnalysisStatus {
+  Pending
+  Processing
+  Completed
+  Failed
+  Superseded
+}
+
+enum RcaCapaMediaType {
+  Photo
+  Video
 }
