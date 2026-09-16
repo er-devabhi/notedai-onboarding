@@ -109,8 +109,11 @@ export const userRoles = [
   'EXECUTIVE',
   'ASSISTANT',
   'DEPARTMENT',
+  'MOD',
+  'SERVICE_RECOVERY',
+  'SERVICE_EXCELLENCE',
   'GRE_HEAD',
-  'SERVICE_EXCELLENCE'
+  'NURSE'
 ] as const
 
 // Escalation Level validation
