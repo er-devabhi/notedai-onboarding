@@ -73,7 +73,7 @@ export async function createUser(data: CreateUserInput): Promise<ActionResult> {
     const user = await prisma.users.create({
       data: {
         name: parsed.data.name,
-        email: parsed.data.email,
+        email: parsed.data.email || null,
         password: hashedPassword,
         role: parsed.data.role,
         restaurant_id: parsed.data.restaurant_id,
@@ -132,7 +132,7 @@ export async function updateUser(
       where: { id },
       data: {
         name: parsed.data.name,
-        email: parsed.data.email,
+        email: parsed.data.email || null,
         role: parsed.data.role,
         restaurant_id: parsed.data.restaurant_id,
         outlet_id: parsed.data.outlet_id,

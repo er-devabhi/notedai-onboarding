@@ -17,7 +17,7 @@ export default function DashboardLayout({
     <SidebarProvider defaultOpen>
       <div className="flex w-full bg-background">
         <Sidebar />
-        <div className="w-full h-svh flex flex-col overflow-y-auto">
+        <div className="w-full h-full flex flex-col overflow-y-auto">
           <Header />
           <main className="flex-1 p-6">{children}</main>
         </div>

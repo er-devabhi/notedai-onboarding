@@ -48,13 +48,15 @@ export interface DepartmentConfig {
   id: number
   outlet_department_id: number
   name: string
-  email: string
+  email: string | null
   whatsapp_number: string[]
   type: 'TO' | 'CC'
   is_active: boolean
   created_at: Date
   updated_at: Date
-  users: { role: UserRole } | null
+  user_id: string | null
+  escalation_level_id: number | null
+  users: { id: string; role: UserRole } | null
 }
 
 export interface DepartmentSubscription {

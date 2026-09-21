@@ -62,7 +62,9 @@ export type OutletDepartmentInput = z.infer<typeof outletDepartmentSchema>
 // Department contact config validation
 export const departmentConfigSchema = z.object({
   name: z.string().min(1, 'Contact name is required').max(255),
-  email: z.string().email('A valid email is required').max(255),
+  email: z
+    .union([z.string().email('A valid email is required').max(255), z.literal('')])
+    .optional(),
   type: z.enum(['TO', 'CC']),
   whatsapp_number: z
     .array(
@@ -72,6 +74,7 @@ export const departmentConfigSchema = z.object({
     )
     .default([]),
   is_active: z.boolean().default(true),
+  escalation_level_id: z.number().int().positive().optional().nullable(),
 })
 
 export type DepartmentConfigInput = z.infer<typeof departmentConfigSchema>
@@ -155,7 +158,9 @@ export const slaPriorities = ['Low', 'Medium', 'High'] as const
 
 export const createUserSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
-  email: z.string().email('Valid email required').max(255),
+  email: z
+    .union([z.string().email('Valid email required').max(255), z.literal('')])
+    .optional(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(userRoles).default('MANAGER'),
   restaurant_id: z.number().int().positive().optional().nullable(),

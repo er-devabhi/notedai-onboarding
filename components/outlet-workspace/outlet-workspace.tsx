@@ -92,7 +92,7 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col gap-4">
-        <div className="sticky top-16 z-100 -mx-6 bg-background px-6 py-2">
+        <div className="sticky top-16 z-20 -mx-6 bg-background px-6 py-2">
           <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="overview" className="gap-2">
             <LayoutDashboard className="h-4 w-4" />
@@ -181,10 +181,11 @@ export function OutletWorkspace({ outlet }: OutletWorkspaceProps) {
               outletId={outlet.id}
               departments={outlet.outlet_departments}
               departmentUsers={outlet.users.filter((u) =>
-                (['DEPARTMENT', 'GRE_HEAD', 'SERVICE_EXCELLENCE'] as const).includes(
-                  u.role as 'DEPARTMENT' | 'GRE_HEAD' | 'SERVICE_EXCELLENCE'
+                (['DEPARTMENT', 'GRE_HEAD', 'SERVICE_EXCELLENCE', 'STAFF'] as const).includes(
+                  u.role as 'DEPARTMENT' | 'GRE_HEAD' | 'SERVICE_EXCELLENCE' | 'STAFF'
                 )
               )}
+              escalationLevels={outlet.escalation_level}
               defaultEmailCc={outlet.default_email_cc}
               dashboardUrl={outlet.dashboard_url}
             />

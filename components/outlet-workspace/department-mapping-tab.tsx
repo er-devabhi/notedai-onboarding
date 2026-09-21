@@ -74,7 +74,12 @@ import {
   Search,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { OutletDepartment, DepartmentConfig, User } from "@/types";
+import type {
+  OutletDepartment,
+  DepartmentConfig,
+  User,
+  EscalationLevel,
+} from "@/types";
 import { BulkUploadDepartmentsDialog } from "./bulk-upload-departments-dialog";
 import { BulkUploadDeptMappingDialog } from "./bulk-upload-dept-mapping-dialog";
 
@@ -82,6 +87,7 @@ interface DepartmentMappingTabProps {
   outletId: number;
   departments: OutletDepartment[];
   departmentUsers: User[];
+  escalationLevels: EscalationLevel[];
   defaultEmailCc: string[];
   dashboardUrl: string | null;
 }
@@ -89,7 +95,15 @@ interface DepartmentMappingTabProps {
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^\d{7,15}$/;
 
-type DepartmentMappableRole = "DEPARTMENT" | "GRE_HEAD" | "SERVICE_EXCELLENCE";
+// Radix Select disallows an empty-string item value, so the "no specific
+// level" / legacy role-based option is encoded as this sentinel.
+const LEGACY_LEVEL_VALUE = "legacy";
+
+type DepartmentMappableRole =
+  | "DEPARTMENT"
+  | "GRE_HEAD"
+  | "SERVICE_EXCELLENCE"
+  | "STAFF";
 type RoleFilter = "ALL" | DepartmentMappableRole;
 
 const ROLE_FILTER_OPTIONS: { value: RoleFilter; label: string }[] = [
@@ -97,6 +111,7 @@ const ROLE_FILTER_OPTIONS: { value: RoleFilter; label: string }[] = [
   { value: "DEPARTMENT", label: "DEPARTMENT" },
   { value: "GRE_HEAD", label: "GRE HEAD" },
   { value: "SERVICE_EXCELLENCE", label: "SERVICE EXCELLENCE" },
+  { value: "STAFF", label: "STAFF" },
 ];
 
 // ── Reusable chips input ──────────────────────────────────────────────────────
@@ -190,6 +205,7 @@ interface RowDraft {
   type: "TO" | "CC";
   whatsapp: string; // comma-separated for compact inline editing
   is_active: boolean;
+  escalation_level_id: number | null;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -198,10 +214,20 @@ export function DepartmentMappingTab({
   outletId,
   departments,
   departmentUsers,
+  escalationLevels,
   defaultEmailCc,
   dashboardUrl,
 }: DepartmentMappingTabProps) {
   const router = useRouter();
+  const activeEscalationLevels = escalationLevels
+    .filter((l) => l.is_active)
+    .sort((a, b) => a.sequence - b.sequence);
+  const levelOptionLabel = (l: EscalationLevel) => `${l.name} [${l.sequence}]`;
+  const levelLabel = (levelId: number | null) => {
+    if (levelId === null) return "Legacy";
+    const level = escalationLevels.find((l) => l.id === levelId);
+    return level ? levelOptionLabel(level) : "Legacy";
+  };
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -215,7 +241,9 @@ export function DepartmentMappingTab({
   const [bulkMapRole, setBulkMapRole] =
     useState<DepartmentMappableRole>("DEPARTMENT");
   const [bulkMapUserId, setBulkMapUserId] = useState<string>("");
+  const [bulkMapEmail, setBulkMapEmail] = useState<string>("");
   const [bulkMapType, setBulkMapType] = useState<"TO" | "CC">("TO");
+  const [bulkMapLevelId, setBulkMapLevelId] = useState<number | null>(null);
   const [bulkMapError, setBulkMapError] = useState<string | null>(null);
   const [bulkMapResult, setBulkMapResult] = useState<BulkMapResult | null>(
     null,
@@ -228,13 +256,16 @@ export function DepartmentMappingTab({
   // Inline "map existing user" draft (per department, no modal)
   const [mapDraftDeptId, setMapDraftDeptId] = useState<number | null>(null);
   const [mapUserId, setMapUserId] = useState<string>("");
+  const [mapEmail, setMapEmail] = useState<string>("");
   const [mapType, setMapType] = useState<"TO" | "CC">("TO");
   const [mapWhatsapp, setMapWhatsapp] = useState<string>("");
   const [mapActive, setMapActive] = useState(true);
+  const [mapLevelId, setMapLevelId] = useState<number | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
 
   // Inline row editing
   const [editingRowId, setEditingRowId] = useState<number | null>(null);
+  const [editUserId, setEditUserId] = useState<string>("");
   const [rowDraft, setRowDraft] = useState<RowDraft | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
 
@@ -261,6 +292,7 @@ export function DepartmentMappingTab({
       type: "TO",
       whatsapp_number: [],
       is_active: true,
+      escalation_level_id: null,
     },
   });
 
@@ -308,6 +340,7 @@ export function DepartmentMappingTab({
       type: "TO",
       whatsapp_number: [],
       is_active: true,
+      escalation_level_id: null,
     });
     setAddDialogOpen(true);
   };
@@ -337,9 +370,11 @@ export function DepartmentMappingTab({
     cancelEditRow();
     setMapError(null);
     setMapUserId("");
+    setMapEmail("");
     setMapType("TO");
     setMapWhatsapp("");
     setMapActive(true);
+    setMapLevelId(null);
     setMapDraftDeptId(departmentId);
   };
 
@@ -355,16 +390,21 @@ export function DepartmentMappingTab({
     }
     const user = departmentUsers.find((u) => u.id === mapUserId);
     if (!user) return;
+    if (mapLevelTaken) {
+      setMapError("This user is already mapped at that level");
+      return;
+    }
     const numbers = mapWhatsapp
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
     const payload = {
-      name: (user.name || user.email || "").trim(),
-      email: (user.email || "").trim(),
+      name: (user.name || mapEmail || "").trim(),
+      email: mapEmail.trim(),
       type: mapType,
       whatsapp_number: numbers,
       is_active: mapActive,
+      escalation_level_id: mapLevelId,
     };
     const parsed = departmentConfigSchema.safeParse(payload);
     if (!parsed.success) {
@@ -373,7 +413,11 @@ export function DepartmentMappingTab({
     }
     setMapError(null);
     startTransition(async () => {
-      const result = await createDepartmentConfig(departmentId, parsed.data);
+      const result = await createDepartmentConfig(
+        departmentId,
+        parsed.data,
+        mapUserId,
+      );
       if (result.success) {
         cancelMapDraft();
         router.refresh();
@@ -390,23 +434,30 @@ export function DepartmentMappingTab({
     setMapDraftDeptId(null);
     setRowError(null);
     setEditingRowId(config.id);
+    setEditUserId(config.users?.id ?? "");
     setRowDraft({
       name: config.name,
-      email: config.email,
+      email: config.email ?? "",
       type: config.type,
       whatsapp: config.whatsapp_number.join(", "),
       is_active: config.is_active,
+      escalation_level_id: config.escalation_level_id,
     });
   };
 
   const cancelEditRow = () => {
     setEditingRowId(null);
+    setEditUserId("");
     setRowDraft(null);
     setRowError(null);
   };
 
   const saveEditRow = (configId: number) => {
     if (!rowDraft) return;
+    if (editLevelTaken) {
+      setRowError("This user is already mapped at that level");
+      return;
+    }
     const numbers = rowDraft.whatsapp
       .split(",")
       .map((s) => s.trim())
@@ -417,6 +468,7 @@ export function DepartmentMappingTab({
       type: rowDraft.type,
       whatsapp_number: numbers,
       is_active: rowDraft.is_active,
+      escalation_level_id: rowDraft.escalation_level_id,
     };
     const parsed = departmentConfigSchema.safeParse(payload);
     if (!parsed.success) {
@@ -425,7 +477,11 @@ export function DepartmentMappingTab({
     }
     setRowError(null);
     startTransition(async () => {
-      const result = await updateDepartmentConfig(configId, parsed.data);
+      const result = await updateDepartmentConfig(
+        configId,
+        parsed.data,
+        editUserId || undefined,
+      );
       if (result.success) {
         cancelEditRow();
         router.refresh();
@@ -463,13 +519,19 @@ export function DepartmentMappingTab({
     setBulkMapResult(null);
     setBulkMapRole("DEPARTMENT");
     setBulkMapUserId("");
+    setBulkMapEmail("");
     setBulkMapType("TO");
+    setBulkMapLevelId(null);
     setIsBulkMapOpen(true);
   };
 
   const handleBulkMap = () => {
     if (!bulkMapUserId) {
       setBulkMapError("Please select a user");
+      return;
+    }
+    if (!bulkMapSelectedUser?.email && !bulkMapEmail.trim()) {
+      setBulkMapError("This user has no email — provide a contact email");
       return;
     }
     setBulkMapError(null);
@@ -479,6 +541,8 @@ export function DepartmentMappingTab({
         outletId,
         bulkMapUserId,
         bulkMapType,
+        bulkMapEmail.trim() || undefined,
+        bulkMapLevelId,
       );
       if (result.success) {
         setBulkMapResult(result.data ?? null);
@@ -497,43 +561,60 @@ export function DepartmentMappingTab({
       ? departmentUsers
       : departmentUsers.filter((u) => u.role === roleFilter);
 
-  // Users available to map into the department being mapped (not already a contact there)
-  const mapAvailableUsers = (() => {
-    const dept = departments.find((d) => d.id === mapDraftDeptId);
-    const existingEmails = new Set(
-      dept?.configs.map((c) => c.email.toLowerCase()) ?? [],
+  // A user can hold several rows in one department as long as each row is
+  // pinned to a different escalation level (or "Legacy"). So users are always
+  // selectable; what's constrained is the level — a level is "taken" only if
+  // the chosen user already has a row at it in that department. `null` in the
+  // returned set stands for the Legacy / role-based option.
+  const takenLevels = (
+    dept: OutletDepartment | undefined,
+    userId: string,
+    ignoreConfigId: number | null = null,
+  ): Set<number | null> =>
+    new Set(
+      userId
+        ? (dept?.configs ?? [])
+            .filter((c) => c.users?.id === userId && c.id !== ignoreConfigId)
+            .map((c) => c.escalation_level_id)
+        : [],
     );
-    return roleFilteredUsers.filter(
-      (u) => u.email && !existingEmails.has(u.email.toLowerCase()),
-    );
-  })();
-  const mapSelectedUser = roleFilteredUsers.find((u) => u.id === mapUserId);
 
-  // For the inline-edit user dropdown: users selectable for the row being
-  // edited (excludes emails already used by OTHER rows in that department).
+  // Keeps the current level if it's free, otherwise the first free one (real
+  // levels by sequence, then Legacy). `undefined` means every option is taken.
+  const pickFreeLevel = (
+    taken: Set<number | null>,
+    preferred: number | null,
+  ): number | null | undefined => {
+    if (!taken.has(preferred)) return preferred;
+    const candidates = [...activeEscalationLevels.map((l) => l.id), null];
+    return candidates.find((id) => !taken.has(id));
+  };
+
+  const mapAvailableUsers = roleFilteredUsers;
+  const mapDept = departments.find((d) => d.id === mapDraftDeptId);
+  const mapTakenLevels = takenLevels(mapDept, mapUserId);
+  const mapLevelTaken = mapTakenLevels.has(mapLevelId);
+  const mapNoFreeLevel =
+    !!mapUserId && pickFreeLevel(mapTakenLevels, mapLevelId) === undefined;
+
+  // Inline-edit row: same rule, ignoring the row being edited itself.
   const editDept = editingRowId
     ? departments.find((d) => d.configs.some((c) => c.id === editingRowId))
     : undefined;
-  const editUsedEmails = new Set(
-    editDept?.configs
-      .filter((c) => c.id !== editingRowId)
-      .map((c) => c.email.toLowerCase()) ?? [],
+  const editAvailableUsers = roleFilteredUsers;
+  const editTakenLevels = takenLevels(editDept, editUserId, editingRowId);
+  const editLevelTaken = editTakenLevels.has(
+    rowDraft?.escalation_level_id ?? null,
   );
-  const editAvailableUsers = roleFilteredUsers.filter(
-    (u) => u.email && !editUsedEmails.has(u.email.toLowerCase()),
-  );
-  const selectedEditUserId =
-    roleFilteredUsers.find(
-      (u) => u.email?.toLowerCase() === (rowDraft?.email ?? "").toLowerCase(),
-    )?.id ?? "";
 
   const roleFilterLabel =
     ROLE_FILTER_OPTIONS.find((o) => o.value === roleFilter)?.label ?? "";
 
   // Users selectable in the "map to all departments" dialog, scoped to the
-  // role picked there (independent of the table's roleFilter)
+  // role picked there (independent of the table's roleFilter). Users without
+  // an email are included — a contact email can be entered manually for them.
   const bulkMapAvailableUsers = departmentUsers.filter(
-    (u) => u.role === bulkMapRole && u.email,
+    (u) => u.role === bulkMapRole,
   );
   const bulkMapSelectedUser = bulkMapAvailableUsers.find(
     (u) => u.id === bulkMapUserId,
@@ -561,7 +642,7 @@ export function DepartmentMappingTab({
           : roleFilteredConfigs.filter(
               (c) =>
                 c.name.toLowerCase().includes(searchQueryNormalized) ||
-                c.email.toLowerCase().includes(searchQueryNormalized),
+                (c.email ?? "").toLowerCase().includes(searchQueryNormalized),
             );
 
       return { ...dept, visibleConfigs, deptNameMatches };
@@ -741,6 +822,9 @@ export function DepartmentMappingTab({
                     <th className="px-3 py-2 text-left font-medium w-56 min-w-55">
                       Email
                     </th>
+                    <th className="px-3 py-2 text-left font-medium w-40 min-w-40">
+                      Level
+                    </th>
                     <th className="px-3 py-2 text-left font-medium w-34 min-w-34">
                       Type
                     </th>
@@ -796,10 +880,17 @@ export function DepartmentMappingTab({
                           <td className="border-t px-3 py-2 align-top">
                             {isEditing ? (
                               <Select
-                                value={selectedEditUserId}
+                                value={editUserId}
                                 onValueChange={(val) => {
+                                  setEditUserId(val);
                                   const u = roleFilteredUsers.find(
                                     (x) => x.id === val,
+                                  );
+                                  // Switching user may land on a level that
+                                  // user already holds here — move to a free one.
+                                  const free = pickFreeLevel(
+                                    takenLevels(editDept, val, editingRowId),
+                                    rowDraft?.escalation_level_id ?? null,
                                   );
                                   if (u)
                                     setRowDraft((d) =>
@@ -807,7 +898,11 @@ export function DepartmentMappingTab({
                                         ? {
                                             ...d,
                                             name: u.name || u.email || "",
-                                            email: u.email || "",
+                                            email: u.email || d.email,
+                                            escalation_level_id:
+                                              free === undefined
+                                                ? d.escalation_level_id
+                                                : free,
                                           }
                                         : d,
                                     );
@@ -837,13 +932,76 @@ export function DepartmentMappingTab({
                             )}
                           </td>
 
-                          {/* Email (auto-assigned from the selected user) */}
+                          {/* Email (prefilled from the selected user, editable) */}
                           <td className="border-t px-3 py-2 align-top">
-                            <span className="text-muted-foreground">
-                              {isEditing
-                                ? rowDraft?.email || "—"
-                                : config.email}
-                            </span>
+                            {isEditing ? (
+                              <Input
+                                value={rowDraft?.email ?? ""}
+                                onChange={(e) =>
+                                  setRowDraft((d) =>
+                                    d ? { ...d, email: e.target.value } : d,
+                                  )
+                                }
+                                placeholder="contact@example.com"
+                                className="h-8 min-w-44"
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {config.email || "—"}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Escalation Level */}
+                          <td className="border-t px-3 py-2 align-top w-40 min-w-40">
+                            {isEditing ? (
+                              <Select
+                                value={
+                                  rowDraft?.escalation_level_id?.toString() ??
+                                  LEGACY_LEVEL_VALUE
+                                }
+                                onValueChange={(v) =>
+                                  setRowDraft((d) =>
+                                    d
+                                      ? {
+                                          ...d,
+                                          escalation_level_id:
+                                            v === LEGACY_LEVEL_VALUE
+                                              ? null
+                                              : parseInt(v, 10),
+                                        }
+                                      : d,
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-8 min-w-36">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem
+                                    value={LEGACY_LEVEL_VALUE}
+                                    disabled={editTakenLevels.has(null)}
+                                  >
+                                    Legacy / role-based
+                                    {editTakenLevels.has(null) && " (mapped)"}
+                                  </SelectItem>
+                                  {activeEscalationLevels.map((l) => (
+                                    <SelectItem
+                                      key={l.id}
+                                      value={l.id.toString()}
+                                      disabled={editTakenLevels.has(l.id)}
+                                    >
+                                      {levelOptionLabel(l)}
+                                      {editTakenLevels.has(l.id) && " (mapped)"}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant="outline">
+                                {levelLabel(config.escalation_level_id)}
+                              </Badge>
+                            )}
                           </td>
 
                           {/* Type */}
@@ -1008,9 +1166,9 @@ export function DepartmentMappingTab({
                                       </AlertDialogTitle>
                                       <AlertDialogDescription>
                                         Remove &quot;{config.name}&quot; (
-                                        {config.email}) from {dept.name}? This
-                                        removes the contact and its department
-                                        mapping.
+                                        {config.email || "no email"}) from{" "}
+                                        {dept.name}? This removes the contact
+                                        and its department mapping.
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -1043,7 +1201,20 @@ export function DepartmentMappingTab({
                               <td className="border-t px-3 py-2 align-top">
                                 <Select
                                   value={mapUserId}
-                                  onValueChange={setMapUserId}
+                                  onValueChange={(val) => {
+                                    setMapUserId(val);
+                                    const u = mapAvailableUsers.find(
+                                      (x) => x.id === val,
+                                    );
+                                    setMapEmail(u?.email || "");
+                                    // The same user can be mapped again at a
+                                    // different level — move to a free one.
+                                    const free = pickFreeLevel(
+                                      takenLevels(mapDept, val),
+                                      mapLevelId,
+                                    );
+                                    if (free !== undefined) setMapLevelId(free);
+                                  }}
                                 >
                                   <SelectTrigger className="h-8 min-w-44">
                                     <SelectValue placeholder="Select user" />
@@ -1063,11 +1234,55 @@ export function DepartmentMappingTab({
                                   </SelectContent>
                                 </Select>
                               </td>
-                              {/* Email (auto) */}
+                              {/* Email (prefilled from the selected user, editable) */}
                               <td className="border-t px-3 py-2 align-top">
-                                <span className="text-muted-foreground">
-                                  {mapSelectedUser?.email || "—"}
-                                </span>
+                                <Input
+                                  value={mapEmail}
+                                  onChange={(e) => setMapEmail(e.target.value)}
+                                  placeholder="contact@example.com"
+                                  className="h-8 min-w-44"
+                                />
+                              </td>
+                              {/* Escalation Level */}
+                              <td className="border-t px-3 py-2 align-top w-40 min-w-40">
+                                <Select
+                                  value={mapLevelId?.toString() ?? LEGACY_LEVEL_VALUE}
+                                  onValueChange={(v) =>
+                                    setMapLevelId(
+                                      v === LEGACY_LEVEL_VALUE
+                                        ? null
+                                        : parseInt(v, 10),
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger className="h-8 min-w-36">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem
+                                      value={LEGACY_LEVEL_VALUE}
+                                      disabled={mapTakenLevels.has(null)}
+                                    >
+                                      Legacy / role-based
+                                      {mapTakenLevels.has(null) && " (mapped)"}
+                                    </SelectItem>
+                                    {activeEscalationLevels.map((l) => (
+                                      <SelectItem
+                                        key={l.id}
+                                        value={l.id.toString()}
+                                        disabled={mapTakenLevels.has(l.id)}
+                                      >
+                                        {levelOptionLabel(l)}
+                                        {mapTakenLevels.has(l.id) && " (mapped)"}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {mapNoFreeLevel && (
+                                  <p className="mt-1 max-w-40 text-xs text-destructive">
+                                    Already mapped at every level
+                                  </p>
+                                )}
                               </td>
                               {/* Type */}
                               <td className="border-t px-3 py-2 align-top w-24 min-w-24">
@@ -1110,7 +1325,9 @@ export function DepartmentMappingTab({
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => saveMapDraft(dept.id)}
-                                      disabled={isPending || !mapUserId}
+                                      disabled={
+                                        isPending || !mapUserId || mapLevelTaken
+                                      }
                                     >
                                       {isPending ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -1140,7 +1357,7 @@ export function DepartmentMappingTab({
                           ) : (
                             <>
                               <td
-                                colSpan={5}
+                                colSpan={6}
                                 className="border-t px-3 py-2 text-sm text-muted-foreground"
                               >
                                 {dept.visibleConfigs.length === 0 ? (
@@ -1288,14 +1505,12 @@ export function DepartmentMappingTab({
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="add-email">
-                  Email <span className="text-destructive">*</span>
-                </Label>
+                <Label htmlFor="add-email">Email</Label>
                 <Input
                   id="add-email"
                   type="email"
                   {...addUserForm.register("email")}
-                  placeholder="contact@example.com"
+                  placeholder="contact@example.com (optional)"
                 />
                 {addUserForm.formState.errors.email && (
                   <p className="text-sm text-destructive">
@@ -1320,6 +1535,40 @@ export function DepartmentMappingTab({
                     <SelectItem value="CC">CC (copied)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label>Escalation Level</Label>
+                <Select
+                  value={
+                    addUserForm.watch("escalation_level_id")?.toString() ??
+                    LEGACY_LEVEL_VALUE
+                  }
+                  onValueChange={(v) =>
+                    addUserForm.setValue(
+                      "escalation_level_id",
+                      v === LEGACY_LEVEL_VALUE ? null : parseInt(v, 10),
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={LEGACY_LEVEL_VALUE}>
+                      Legacy / role-based
+                    </SelectItem>
+                    {activeEscalationLevels.map((l) => (
+                      <SelectItem key={l.id} value={l.id.toString()}>
+                        {levelOptionLabel(l)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Ties this contact to a specific escalation level instead of
+                  falling back to their account role.
+                </p>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -1417,7 +1666,14 @@ export function DepartmentMappingTab({
 
             <div className="flex flex-col gap-2">
               <Label>User</Label>
-              <Select value={bulkMapUserId} onValueChange={setBulkMapUserId}>
+              <Select
+                value={bulkMapUserId}
+                onValueChange={(val) => {
+                  setBulkMapUserId(val);
+                  const u = bulkMapAvailableUsers.find((x) => x.id === val);
+                  setBulkMapEmail(u?.email || "");
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a user" />
                 </SelectTrigger>
@@ -1438,6 +1694,22 @@ export function DepartmentMappingTab({
               </Select>
             </div>
 
+            {bulkMapUserId && !bulkMapSelectedUser?.email && (
+              <div className="flex flex-col gap-2">
+                <Label>Contact Email</Label>
+                <Input
+                  type="email"
+                  value={bulkMapEmail}
+                  onChange={(e) => setBulkMapEmail(e.target.value)}
+                  placeholder="contact@example.com"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This user has no email on file — provide one to use for
+                  department notifications.
+                </p>
+              </div>
+            )}
+
             <div className="flex flex-col gap-2">
               <Label>Contact Type</Label>
               <Select
@@ -1454,11 +1726,48 @@ export function DepartmentMappingTab({
               </Select>
             </div>
 
+            <div className="flex flex-col gap-2">
+              <Label>Escalation Level</Label>
+              <Select
+                value={bulkMapLevelId?.toString() ?? LEGACY_LEVEL_VALUE}
+                onValueChange={(v) =>
+                  setBulkMapLevelId(
+                    v === LEGACY_LEVEL_VALUE ? null : parseInt(v, 10),
+                  )
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={LEGACY_LEVEL_VALUE}>
+                    Legacy / role-based
+                  </SelectItem>
+                  {activeEscalationLevels.map((l) => (
+                    <SelectItem key={l.id} value={l.id.toString()}>
+                      {levelOptionLabel(l)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Applies to every department this creates a contact in. Every
+                active level is offered regardless of the selected user&apos;s
+                role.
+              </p>
+            </div>
+
             {bulkMapSelectedUser && (
               <p className="text-xs text-muted-foreground">
-                Will add {bulkMapSelectedUser.name || bulkMapSelectedUser.email}{" "}
-                as a {bulkMapType} contact on every department not already
-                mapped to {bulkMapSelectedUser.email}.
+                Will add{" "}
+                {bulkMapSelectedUser.name ||
+                  bulkMapSelectedUser.email ||
+                  bulkMapEmail ||
+                  "this user"}{" "}
+                as a {bulkMapType} contact ({levelLabel(bulkMapLevelId)}) on
+                every department not already mapped to{" "}
+                {bulkMapSelectedUser.email || bulkMapEmail || "—"} at that
+                level.
               </p>
             )}
 

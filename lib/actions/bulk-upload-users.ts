@@ -81,11 +81,8 @@ export async function bulkUploadUsers(
       results.push({ ...base, status: 'failed', error: 'Name is required' })
       continue
     }
-    if (!email) {
-      results.push({ ...base, status: 'failed', error: 'Email is required' })
-      continue
-    }
-    if (!emailRegex.test(email)) {
+    // Email is optional; when given, it must be well-formed.
+    if (email && !emailRegex.test(email)) {
       results.push({ ...base, status: 'failed', error: 'Invalid email format' })
       continue
     }
@@ -98,9 +95,18 @@ export async function bulkUploadUsers(
       continue
     }
 
-    // Password: use provided (min 6), otherwise derive from email.
+    // Password: use provided (min 6), otherwise derive from email. With
+    // neither, there's nothing to show back as this row's credential.
     let password = record.password?.trim() || ''
     if (!password) {
+      if (!email) {
+        results.push({
+          ...base,
+          status: 'failed',
+          error: 'Provide an email or a password',
+        })
+        continue
+      }
       password = derivePasswordFromEmail(email)
     } else if (password.length < 6) {
       results.push({
@@ -111,33 +117,34 @@ export async function bulkUploadUsers(
       continue
     }
 
-    // Duplicate within the file
-    if (seenEmails.has(email)) {
-      results.push({
-        ...base,
-        status: 'failed',
-        error: 'Duplicate email in file',
-      })
-      continue
+    // Duplicate checks only apply to rows that actually have an email —
+    // multiple no-email users are fine (email is a nullable unique column).
+    if (email) {
+      if (seenEmails.has(email)) {
+        results.push({
+          ...base,
+          status: 'failed',
+          error: 'Duplicate email in file',
+        })
+        continue
+      }
+      if (existingEmails.has(email)) {
+        results.push({
+          ...base,
+          status: 'failed',
+          error: 'Email already registered',
+        })
+        continue
+      }
+      seenEmails.add(email)
     }
-    // Already registered in DB
-    if (existingEmails.has(email)) {
-      results.push({
-        ...base,
-        status: 'failed',
-        error: 'Email already registered',
-      })
-      continue
-    }
-
-    seenEmails.add(email)
 
     try {
       const hashedPassword = await hashPassword(password)
       await prisma.users.create({
         data: {
           name,
-          email,
+          email: email || null,
           password: hashedPassword,
           role: role as UserRole,
           outlet_id: outletId,

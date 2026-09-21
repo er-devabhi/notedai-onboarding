@@ -229,9 +229,10 @@ export function BulkUploadUsersDialog({
           <DialogTitle>Bulk Upload Users</DialogTitle>
           <DialogDescription>
             Upload a CSV with &quot;Name&quot;, &quot;Email&quot;,
-            &quot;Role&quot; and &quot;Password&quot; columns. Leave Role blank to
-            default to GRE, and Password blank to auto-generate it from the
-            email (prefix#1234).
+            &quot;Role&quot; and &quot;Password&quot; columns. Leave Role blank
+            to default to GRE. Email is optional, but then Password is
+            required (min 6 characters) — with an email, leave Password blank
+            to auto-generate it (prefix#1234).
           </DialogDescription>
         </DialogHeader>
 

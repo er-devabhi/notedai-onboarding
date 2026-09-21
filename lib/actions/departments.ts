@@ -1,6 +1,8 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { Prisma, UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/auth/password'
@@ -135,7 +137,8 @@ export async function deleteDepartment(id: number): Promise<ActionResult> {
 
 export async function createDepartmentConfig(
   departmentId: number,
-  data: DepartmentConfigInput
+  data: DepartmentConfigInput,
+  existingUserId?: string
 ): Promise<ActionResult> {
   const parsed = departmentConfigSchema.safeParse(data)
   if (!parsed.success) {
@@ -160,11 +163,18 @@ export async function createDepartmentConfig(
     }
 
     const name = parsed.data.name.trim()
-    const email = parsed.data.email.trim().toLowerCase()
+    const email = parsed.data.email?.trim().toLowerCase() || null
+
+    if (!email && !existingUserId) {
+      return {
+        success: false,
+        error: 'Provide a contact email, or pick an existing user',
+      }
+    }
 
     // A DEPARTMENT user is created (if needed) and subscribed to the
     // department for every contact. Password is only used when creating.
-    const hashedPassword = await hashPassword(derivePasswordFromEmail(email))
+    const hashedPassword = await hashPassword(derivePassword(email))
 
     const config = await prisma.$transaction(async (tx) => {
       const user = await ensureDepartmentUserAndSubscription(tx, {
@@ -174,7 +184,15 @@ export async function createDepartmentConfig(
         name,
         email,
         hashedPassword,
+        existingUserId,
       })
+
+      await assertNotAlreadyMapped(
+        tx,
+        departmentId,
+        user.id,
+        parsed.data.escalation_level_id ?? null
+      )
 
       const created = await tx.department_config.create({
         data: {
@@ -185,6 +203,7 @@ export async function createDepartmentConfig(
           whatsapp_number: parsed.data.whatsapp_number,
           is_active: parsed.data.is_active,
           user_id: user.id,
+          escalation_level_id: parsed.data.escalation_level_id ?? null,
         },
       })
 
@@ -194,6 +213,9 @@ export async function createDepartmentConfig(
     revalidatePath(`/outlets/${department.outlet_id}`)
     return { success: true, data: config }
   } catch (error) {
+    if (error instanceof DuplicateMappingError) {
+      return { success: false, error: error.message }
+    }
     console.error('[departments] Error creating config:', error)
     return { success: false, error: 'Failed to create contact' }
   }
@@ -201,7 +223,8 @@ export async function createDepartmentConfig(
 
 export async function updateDepartmentConfig(
   id: number,
-  data: DepartmentConfigInput
+  data: DepartmentConfigInput,
+  existingUserId?: string
 ): Promise<ActionResult> {
   const parsed = departmentConfigSchema.safeParse(data)
   if (!parsed.success) {
@@ -227,9 +250,17 @@ export async function updateDepartmentConfig(
 
     const departmentId = existing.outlet_department.id
     const name = parsed.data.name.trim()
-    const newEmail = parsed.data.email.trim().toLowerCase()
-    const oldEmail = existing.email
-    const hashedPassword = await hashPassword(derivePasswordFromEmail(newEmail))
+    const newEmail = parsed.data.email?.trim().toLowerCase() || null
+    const oldUserId = existing.user_id
+
+    if (!newEmail && !existingUserId) {
+      return {
+        success: false,
+        error: 'Provide a contact email, or pick an existing user',
+      }
+    }
+
+    const hashedPassword = await hashPassword(derivePassword(newEmail))
 
     const config = await prisma.$transaction(async (tx) => {
       // Subscribe the (possibly new) contact's user to the department
@@ -240,7 +271,16 @@ export async function updateDepartmentConfig(
         name,
         email: newEmail,
         hashedPassword,
+        existingUserId,
       })
+
+      await assertNotAlreadyMapped(
+        tx,
+        departmentId,
+        user.id,
+        parsed.data.escalation_level_id ?? null,
+        id
+      )
 
       const updated = await tx.department_config.update({
         where: { id },
@@ -251,13 +291,14 @@ export async function updateDepartmentConfig(
           whatsapp_number: parsed.data.whatsapp_number,
           is_active: parsed.data.is_active,
           user_id: user.id,
+          escalation_level_id: parsed.data.escalation_level_id ?? null,
         },
       })
 
-      // If the email changed, drop the old subscription when no other
-      // contact in this department still references it.
-      if (oldEmail !== newEmail) {
-        await cleanupSubscriptionIfUnused(tx, departmentId, oldEmail)
+      // If the backing user changed, drop the old one's subscription when no
+      // other contact in this department still references them.
+      if (oldUserId !== user.id) {
+        await cleanupSubscriptionIfUnused(tx, departmentId, oldUserId)
       }
 
       return updated
@@ -266,6 +307,9 @@ export async function updateDepartmentConfig(
     revalidatePath(`/outlets/${existing.outlet_department.outlet_id}`)
     return { success: true, data: config }
   } catch (error) {
+    if (error instanceof DuplicateMappingError) {
+      return { success: false, error: error.message }
+    }
     console.error('[departments] Error updating config:', error)
     return { success: false, error: 'Failed to update contact' }
   }
@@ -285,13 +329,13 @@ export async function deleteDepartmentConfig(id: number): Promise<ActionResult> 
     }
 
     const departmentId = existing.outlet_department.id
-    const email = existing.email
+    const userId = existing.user_id
 
     await prisma.$transaction(async (tx) => {
       await tx.department_config.delete({ where: { id } })
       // Remove the user's subscription to this department if no other
-      // contact still references the same email.
-      await cleanupSubscriptionIfUnused(tx, departmentId, email)
+      // contact still references them.
+      await cleanupSubscriptionIfUnused(tx, departmentId, userId)
     })
 
     revalidatePath(`/outlets/${existing.outlet_department.outlet_id}`)
@@ -420,12 +464,15 @@ export interface BulkMapResult {
 export async function bulkMapUserToAllDepartments(
   outletId: number,
   userId: string,
-  contactType: 'TO' | 'CC' = 'TO'
+  contactType: 'TO' | 'CC' = 'TO',
+  contactEmail?: string,
+  escalationLevelId?: number | null
 ): Promise<ActionResult<BulkMapResult>> {
   const mappableRoles: UserRole[] = [
     UserRole.DEPARTMENT,
     UserRole.GRE_HEAD,
     UserRole.SERVICE_EXCELLENCE,
+    UserRole.STAFF,
   ]
 
   try {
@@ -436,32 +483,37 @@ export async function bulkMapUserToAllDepartments(
     if (!user) {
       return { success: false, error: 'User not found' }
     }
-    if (!user.email) {
-      return { success: false, error: 'This user has no email set' }
+    const rawEmail = user.email || contactEmail || null
+    if (rawEmail && !z.string().email().safeParse(rawEmail).success) {
+      return { success: false, error: 'Provide a valid contact email' }
     }
     if (!mappableRoles.includes(user.role)) {
       return {
         success: false,
         error:
-          'Only DEPARTMENT, GRE_HEAD, or SERVICE_EXCELLENCE users can be mapped to departments',
+          'Only DEPARTMENT, GRE_HEAD, SERVICE_EXCELLENCE, or STAFF users can be mapped to departments',
       }
     }
+
+    const levelId = escalationLevelId ?? null
 
     const departments = await prisma.outlet_department.findMany({
       where: { outlet_id: outletId },
       orderBy: { name: 'asc' },
-      include: { configs: { select: { email: true } } },
+      include: { configs: { select: { user_id: true, escalation_level_id: true } } },
     })
 
-    const name = (user.name || user.email).trim()
-    const email = user.email.trim().toLowerCase()
+    const name = (user.name || rawEmail || 'Unnamed User').trim()
+    const email = rawEmail ? rawEmail.trim().toLowerCase() : null
 
     let mapped = 0
     let skipped = 0
 
     for (const dept of departments) {
+      // Excluded only if this exact (user, level) pair is already mapped here —
+      // the same user can hold separate rows for separate escalation levels.
       const alreadyMapped = dept.configs.some(
-        (c) => c.email.toLowerCase() === email
+        (c) => c.user_id === user.id && c.escalation_level_id === levelId
       )
       if (alreadyMapped) {
         skipped++
@@ -478,6 +530,7 @@ export async function bulkMapUserToAllDepartments(
             whatsapp_number: [],
             is_active: true,
             user_id: user.id,
+            escalation_level_id: levelId,
           },
         })
 
@@ -549,23 +602,48 @@ interface EnsureUserArgs {
   outletId: number
   restaurantId: number
   name: string
-  email: string
+  email: string | null
   hashedPassword: string
+  existingUserId?: string
 }
 
 /**
- * Ensures a DEPARTMENT-role user exists for the given email and is subscribed
- * to the department. Existing users are reused (matched by email); only the
- * subscription is added for them.
+ * Ensures a user is subscribed to the department and returns it. When
+ * `existingUserId` is given (an existing user was picked in the mapping UI),
+ * that exact user is reused as-is, even if they have no email of their own —
+ * `email` only becomes this department_config row's routing address.
+ * Otherwise falls back to the legacy behavior of finding or creating a
+ * DEPARTMENT-role user by email — only possible when `email` is set, since a
+ * bare `findUnique({ where: { email: null } })` would match an arbitrary
+ * other no-email user rather than identify a specific one.
  */
 async function ensureDepartmentUserAndSubscription(
   tx: TxClient,
-  { departmentId, outletId, restaurantId, name, email, hashedPassword }: EnsureUserArgs
+  { departmentId, outletId, restaurantId, name, email, hashedPassword, existingUserId }: EnsureUserArgs
 ) {
-  let user = await tx.users.findUnique({
-    where: { email },
-    select: { id: true },
-  })
+  if (existingUserId) {
+    const picked = await tx.users.findUnique({
+      where: { id: existingUserId },
+      select: { id: true },
+    })
+    if (picked) {
+      await tx.user_department_subscription.upsert({
+        where: {
+          user_id_outlet_department_id: {
+            user_id: picked.id,
+            outlet_department_id: departmentId,
+          },
+        },
+        create: { user_id: picked.id, outlet_department_id: departmentId },
+        update: {},
+      })
+      return picked
+    }
+  }
+
+  let user = email
+    ? await tx.users.findUnique({ where: { email }, select: { id: true } })
+    : null
 
   if (!user) {
     user = await tx.users.create({
@@ -600,39 +678,66 @@ async function ensureDepartmentUserAndSubscription(
 
 /**
  * Removes a user's subscription to a department when no remaining contact in
- * that department references the email. The user account itself is preserved.
+ * that department still references them. The user account itself is preserved.
  */
 async function cleanupSubscriptionIfUnused(
   tx: TxClient,
   departmentId: number,
-  email: string
+  userId: string | null
 ) {
+  if (!userId) return
+
   const stillReferenced = await tx.department_config.count({
-    where: { outlet_department_id: departmentId, email },
+    where: { outlet_department_id: departmentId, user_id: userId },
   })
 
   if (stillReferenced > 0) return
 
-  const user = await tx.users.findUnique({
-    where: { email },
-    select: { id: true },
-  })
-
-  if (!user) return
-
   await tx.user_department_subscription.deleteMany({
-    where: { user_id: user.id, outlet_department_id: departmentId },
+    where: { user_id: userId, outlet_department_id: departmentId },
   })
 }
 
 /**
- * Derives a default password from an email, matching the seeding convention:
- * the segment before the first "." of the local part, lowercased, + "#1234".
+ * Derives a default password for a contact's backing user: from the email,
+ * matching the seeding convention (segment before the first "." of the local
+ * part, lowercased, + "#1234"), or a random one when there's no email to key
+ * off of.
  */
-function derivePasswordFromEmail(email: string): string {
+function derivePassword(email: string | null): string {
+  if (!email) return randomUUID()
   const localPart = email.split('@')[0] || ''
   const prefix = localPart.split('.')[0] || localPart
   return `${prefix.toLowerCase()}#1234`
+}
+
+class DuplicateMappingError extends Error {}
+
+/**
+ * A user may have several contacts in one department, but only one per
+ * escalation level (`null` = legacy / role-based). Throws inside the calling
+ * transaction so the subscription upsert is rolled back too.
+ */
+async function assertNotAlreadyMapped(
+  tx: TxClient,
+  departmentId: number,
+  userId: string,
+  escalationLevelId: number | null,
+  ignoreConfigId?: number
+) {
+  const duplicates = await tx.department_config.count({
+    where: {
+      outlet_department_id: departmentId,
+      user_id: userId,
+      escalation_level_id: escalationLevelId,
+      ...(ignoreConfigId ? { id: { not: ignoreConfigId } } : {}),
+    },
+  })
+  if (duplicates > 0) {
+    throw new DuplicateMappingError(
+      'This user is already mapped to this department at that level'
+    )
+  }
 }
 
 function isUniqueConstraintError(error: unknown): boolean {

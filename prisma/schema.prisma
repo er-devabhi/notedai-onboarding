@@ -121,18 +121,21 @@ model department_config {
   id                   Int               @id @default(autoincrement())
   outlet_department_id Int
   name                 String
-  email                String
+  email                String?
   whatsapp_number      String[]          @db.VarChar
   type                 contact_type
   is_active            Boolean           @default(true)
   created_at           DateTime          @default(now())
   updated_at           DateTime          @updatedAt
   user_id              String?           @db.Uuid
+  escalation_level_id  Int?
+  escalation_level     escalation_level? @relation(fields: [escalation_level_id], references: [id])
   outlet_department    outlet_department @relation(fields: [outlet_department_id], references: [id])
   users                users?            @relation(fields: [user_id], references: [id])
 
   @@index([outlet_department_id])
   @@index([user_id])
+  @@index([escalation_level_id])
 }
 
 model table_group {
@@ -720,6 +723,7 @@ model escalation_level {
   updated_at                DateTime                    @db.Timestamptz(6)
   field_config              Json?
   sla_config                Json?
+  department_config         department_config[]
   escalation_action         escalation_action[]
   outlet                    outlet                      @relation(fields: [outlet_id], references: [id], onDelete: Cascade)
   hospital_escalation_group hospital_escalation_group[]

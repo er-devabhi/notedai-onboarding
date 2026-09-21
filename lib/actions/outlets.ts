@@ -61,7 +61,7 @@ export async function getOutlet(id: number) {
           configs: {
             orderBy: [{ type: "asc" }, { name: "asc" }],
             include: {
-              users: { select: { role: true } },
+              users: { select: { id: true, role: true } },
             },
           },
           user_subscriptions: {
