@@ -8,15 +8,16 @@ datasource db {
 }
 
 model users {
-  created_at                                            DateTime                       @default(now()) @db.Timestamptz(6)
-  name                                                  String?                        @db.VarChar
-  email                                                 String?                        @unique @db.VarChar
-  password                                              String?                        @db.VarChar
-  id                                                    String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at                                            DateTime                        @default(now()) @db.Timestamptz(6)
+  name                                                  String?                         @db.VarChar
+  email                                                 String?                         @unique @db.VarChar
+  password                                              String?                         @db.VarChar
+  id                                                    String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   restaurant_id                                         Int?
   outlet_id                                             Int?
-  updated_at                                            DateTime                       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  role                                                  UserRole                       @default(MANAGER)
+  updated_at                                            DateTime                        @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  role                                                  UserRole                        @default(MANAGER)
+  phone_number                                          String?
   audio_files                                           audio_files[]
   conversation                                          conversation[]
   daily_targets                                         daily_targets[]
@@ -24,8 +25,9 @@ model users {
   devices                                               devices[]
   in_patient_feedback_form                              in_patient_feedback_form[]
   notifications                                         notifications[]
-  nursing_handover_nursing_handover_from_user_idTousers nursing_handover[]             @relation("nursing_handover_from_user_idTousers")
-  nursing_handover_nursing_handover_to_user_idTousers   nursing_handover[]             @relation("nursing_handover_to_user_idTousers")
+  nursing_handover_nursing_handover_from_user_idTousers nursing_handover[]              @relation("nursing_handover_from_user_idTousers")
+  nursing_handover_nursing_handover_to_user_idTousers   nursing_handover[]              @relation("nursing_handover_to_user_idTousers")
+  nursing_handover_notification                         nursing_handover_notification[]
   post_discharge_feedback_form                          post_discharge_feedback_form[]
   qr_login                                              qr_login[]
   rca_capa_analysis                                     rca_capa_analysis[]
@@ -33,8 +35,8 @@ model users {
   scanned_doc                                           scanned_doc[]
   support_ticket                                        support_ticket[]
   department_subscriptions                              user_department_subscription[]
-  outlet                                                outlet?                        @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  restaurants                                           restaurants?                   @relation(fields: [restaurant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  outlet                                                outlet?                         @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  restaurants                                           restaurants?                    @relation(fields: [restaurant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([id])
 }
@@ -779,10 +781,10 @@ model scanned_doc_page {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model nursing_handover {
-  id                                         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                                         String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   outlet_id                                  Int
-  from_user_id                               String                @db.Uuid
-  to_user_id                                 String?               @db.Uuid
+  from_user_id                               String                          @db.Uuid
+  to_user_id                                 String?                         @db.Uuid
   from_user_name                             String?
   to_user_name                               String?
   table_id                                   Int?
@@ -790,11 +792,11 @@ model nursing_handover {
   table_group_name                           String?
   patient_name                               String?
   patient_uhid                               String?
-  patient_autocomplete_id                    String?               @db.Uuid
-  previous_handover_id                       String?               @db.Uuid
-  status                                     NursingHandoverStatus @default(Pending)
-  is_success                                 Boolean?              @default(false)
-  retry_count                                Int?                  @default(0)
+  patient_autocomplete_id                    String?                         @db.Uuid
+  previous_handover_id                       String?                         @db.Uuid
+  status                                     NursingHandoverStatus           @default(Pending)
+  is_success                                 Boolean?                        @default(false)
+  retry_count                                Int?                            @default(0)
   error_message                              String?
   transcript                                 Json?
   analysis                                   Json?
@@ -802,18 +804,19 @@ model nursing_handover {
   notes                                      String?
   metadata                                   Json?
   usage                                      Json?
-  is_offline                                 Boolean               @default(false)
-  offline_created_at                         DateTime?             @db.Timestamptz(6)
-  created_at                                 DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at                                 DateTime              @db.Timestamptz(6)
+  is_offline                                 Boolean                         @default(false)
+  offline_created_at                         DateTime?                       @db.Timestamptz(6)
+  created_at                                 DateTime                        @default(now()) @db.Timestamptz(6)
+  updated_at                                 DateTime                        @db.Timestamptz(6)
   audio_files                                audio_files[]
-  users_nursing_handover_from_user_idTousers users                 @relation("nursing_handover_from_user_idTousers", fields: [from_user_id], references: [id], onDelete: NoAction)
-  outlet                                     outlet                @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
-  patient_autocomplete                       patient_autocomplete? @relation(fields: [patient_autocomplete_id], references: [id])
-  nursing_handover                           nursing_handover?     @relation("nursing_handoverTonursing_handover", fields: [previous_handover_id], references: [id])
-  other_nursing_handover                     nursing_handover[]    @relation("nursing_handoverTonursing_handover")
-  table                                      table?                @relation(fields: [table_id], references: [id])
-  users_nursing_handover_to_user_idTousers   users?                @relation("nursing_handover_to_user_idTousers", fields: [to_user_id], references: [id], onDelete: NoAction)
+  users_nursing_handover_from_user_idTousers users                           @relation("nursing_handover_from_user_idTousers", fields: [from_user_id], references: [id], onDelete: NoAction)
+  outlet                                     outlet                          @relation(fields: [outlet_id], references: [id], onDelete: NoAction)
+  patient_autocomplete                       patient_autocomplete?           @relation(fields: [patient_autocomplete_id], references: [id])
+  nursing_handover                           nursing_handover?               @relation("nursing_handoverTonursing_handover", fields: [previous_handover_id], references: [id])
+  other_nursing_handover                     nursing_handover[]              @relation("nursing_handoverTonursing_handover")
+  table                                      table?                          @relation(fields: [table_id], references: [id])
+  users_nursing_handover_to_user_idTousers   users?                          @relation("nursing_handover_to_user_idTousers", fields: [to_user_id], references: [id], onDelete: NoAction)
+  nursing_handover_notification              nursing_handover_notification[]
 
   @@index([outlet_id, patient_uhid, created_at])
   @@index([outlet_id, table_id, created_at])
@@ -865,6 +868,29 @@ model rca_capa_media {
   users                     users                     @relation(fields: [uploaded_by], references: [id], onDelete: NoAction)
 
   @@index([escalation_group_id, created_at])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model nursing_handover_notification {
+  id                  String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nursing_handover_id String                     @db.Uuid
+  outlet_id           Int
+  recipient_user_id   String?                    @db.Uuid
+  kind                HandoverNotificationKind
+  item_key            String
+  payload             Json
+  send_at             DateTime                   @db.Timestamptz(6)
+  status              HandoverNotificationStatus @default(Scheduled)
+  queued_at           DateTime?                  @db.Timestamptz(6)
+  sent_at             DateTime?                  @db.Timestamptz(6)
+  error_message       String?
+  created_at          DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime                   @db.Timestamptz(6)
+  nursing_handover    nursing_handover           @relation(fields: [nursing_handover_id], references: [id], onDelete: Cascade)
+  users               users?                     @relation(fields: [recipient_user_id], references: [id], onDelete: NoAction)
+
+  @@unique([nursing_handover_id, kind, item_key])
+  @@index([status, send_at])
 }
 
 enum UserRole {
@@ -1052,4 +1078,18 @@ enum RcaCapaAnalysisStatus {
 enum RcaCapaMediaType {
   Photo
   Video
+}
+
+enum HandoverNotificationKind {
+  Task
+  Reminder
+}
+
+enum HandoverNotificationStatus {
+  Scheduled
+  Queued
+  Sent
+  Failed
+  Skipped
+  Cancelled
 }

@@ -20,6 +20,7 @@ export async function getUsers(outletId?: number) {
       id: true,
       name: true,
       email: true,
+      phone_number: true,
       role: true,
       outlet_id: true,
       restaurant_id: true,
@@ -42,6 +43,7 @@ export async function getUser(id: string) {
       id: true,
       name: true,
       email: true,
+      phone_number: true,
       role: true,
       outlet_id: true,
       restaurant_id: true,
@@ -74,6 +76,7 @@ export async function createUser(data: CreateUserInput): Promise<ActionResult> {
       data: {
         name: parsed.data.name,
         email: parsed.data.email || null,
+        phone_number: parsed.data.phone_number || null,
         password: hashedPassword,
         role: parsed.data.role,
         restaurant_id: parsed.data.restaurant_id,
@@ -133,6 +136,7 @@ export async function updateUser(
       data: {
         name: parsed.data.name,
         email: parsed.data.email || null,
+        phone_number: parsed.data.phone_number || null,
         role: parsed.data.role,
         restaurant_id: parsed.data.restaurant_id,
         outlet_id: parsed.data.outlet_id,

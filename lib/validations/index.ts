@@ -161,6 +161,9 @@ export const createUserSchema = z.object({
   email: z
     .union([z.string().email('Valid email required').max(255), z.literal('')])
     .optional(),
+  phone_number: z
+    .union([z.string().regex(/^\d{1,10}$/, 'Phone number must be up to 10 digits'), z.literal('')])
+    .optional(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(userRoles).default('MANAGER'),
   restaurant_id: z.number().int().positive().optional().nullable(),

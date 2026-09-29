@@ -57,10 +57,15 @@ interface UsersTabProps {
 }
 
 const optionalEmail = z.union([z.string().email('Valid email required'), z.literal('')])
+const optionalPhone = z.union([
+  z.string().regex(/^\d{1,10}$/, 'Phone number must be up to 10 digits'),
+  z.literal(''),
+])
 
 const createUserSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: optionalEmail,
+  phone_number: optionalPhone,
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(userRoles),
 })
@@ -68,6 +73,7 @@ const createUserSchema = z.object({
 const editUserSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: optionalEmail,
+  phone_number: optionalPhone,
   role: z.enum(userRoles),
 })
 
@@ -110,7 +116,7 @@ export function UsersTab({
 
   const createForm = useForm<CreateUserInput>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { name: '', email: '', password: '', role: 'MANAGER' },
+    defaultValues: { name: '', email: '', phone_number: '', password: '', role: 'MANAGER' },
   })
 
   const editForm = useForm<EditUserInput>({
@@ -123,6 +129,7 @@ export function UsersTab({
       const result = await createUser({
         name: data.name.trim(),
         email: data.email?.trim() || '',
+        phone_number: data.phone_number?.trim() || '',
         password: data.password.trim(),
         role: data.role,
         outlet_id: outletId,
@@ -148,6 +155,7 @@ export function UsersTab({
       const result = await updateUser(editingUser.id, {
         name: data.name,
         email: data.email?.trim() || '',
+        phone_number: data.phone_number?.trim() || '',
         role: data.role,
         outlet_id: outletId,
         restaurant_id: restaurantId,
@@ -176,6 +184,7 @@ export function UsersTab({
     editForm.reset({
       name: user.name || '',
       email: user.email || '',
+      phone_number: user.phone_number || '',
       role: user.role,
     })
   }
@@ -207,6 +216,7 @@ export function UsersTab({
                 createForm.reset({
                   name: '',
                   email: '',
+                  phone_number: '',
                   password: '',
                   role:
                     roleFilter !== 'ALL'
@@ -259,6 +269,22 @@ export function UsersTab({
                     {createForm.formState.errors.email && (
                       <p className="text-sm text-destructive">
                         {createForm.formState.errors.email.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="create-phone">Phone Number</Label>
+                    <Input
+                      id="create-phone"
+                      type="tel"
+                      inputMode="numeric"
+                      {...createForm.register('phone_number')}
+                      placeholder="10 digits (optional)"
+                    />
+                    {createForm.formState.errors.phone_number && (
+                      <p className="text-sm text-destructive">
+                        {createForm.formState.errors.phone_number.message}
                       </p>
                     )}
                   </div>
@@ -392,6 +418,7 @@ export function UsersTab({
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Name</th>
                   <th className="px-3 py-2 text-left font-medium">Email</th>
+                  <th className="px-3 py-2 text-left font-medium">Phone Number</th>
                   <th className="px-3 py-2 text-left font-medium">Role</th>
                   <th className="px-3 py-2 text-right font-medium">Actions</th>
                 </tr>
@@ -404,6 +431,9 @@ export function UsersTab({
                     </td>
                     <td className="border-t px-3 py-2 text-muted-foreground">
                       {user.email}
+                    </td>
+                    <td className="border-t px-3 py-2 text-muted-foreground">
+                      {user.phone_number || '—'}
                     </td>
                     <td className="border-t px-3 py-2">
                       <Badge variant="secondary">{user.role.replace(/_/g, ' ')}</Badge>
@@ -490,6 +520,22 @@ export function UsersTab({
                   {editForm.formState.errors.email && (
                     <p className="text-sm text-destructive">
                       {editForm.formState.errors.email.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="edit-phone">Phone Number</Label>
+                  <Input
+                    id="edit-phone"
+                    type="tel"
+                    inputMode="numeric"
+                    {...editForm.register('phone_number')}
+                    placeholder="10 digits (optional)"
+                  />
+                  {editForm.formState.errors.phone_number && (
+                    <p className="text-sm text-destructive">
+                      {editForm.formState.errors.phone_number.message}
                     </p>
                   )}
                 </div>

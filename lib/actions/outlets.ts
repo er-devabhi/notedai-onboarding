@@ -45,6 +45,7 @@ export async function getOutlet(id: number) {
           id: true,
           name: true,
           email: true,
+          phone_number: true,
           role: true,
           created_at: true,
         },

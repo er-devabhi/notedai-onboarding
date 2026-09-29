@@ -38,6 +38,7 @@ export interface User {
   id: string
   name: string | null
   email: string | null
+  phone_number: string | null
   role: UserRole
   outlet_id?: number | null
   restaurant_id?: number | null

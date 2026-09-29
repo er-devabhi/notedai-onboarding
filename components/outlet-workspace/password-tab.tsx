@@ -23,8 +23,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, KeyRound } from 'lucide-react'
+import { Loader2, KeyRound, Search } from 'lucide-react'
 import type { User } from '@/types'
 
 interface PasswordTabProps {
@@ -48,6 +55,20 @@ export function PasswordTab({ users }: PasswordTabProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [roleFilter, setRoleFilter] = useState<string>('ALL')
+  const [search, setSearch] = useState('')
+
+  const availableRoles = Array.from(new Set(users.map((u) => u.role))).sort()
+
+  const searchQuery = search.trim().toLowerCase()
+  const filteredUsers = users
+    .filter((u) => roleFilter === 'ALL' || u.role === roleFilter)
+    .filter((u) =>
+      searchQuery
+        ? (u.name || '').toLowerCase().includes(searchQuery) ||
+          (u.email || '').toLowerCase().includes(searchQuery)
+        : true
+    )
 
   const form = useForm<PasswordInput>({
     resolver: zodResolver(passwordSchema),
@@ -105,30 +126,83 @@ export function PasswordTab({ users }: PasswordTabProps) {
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {users.map((user) => (
-              <div
-                key={user.id}
-                className="flex items-center justify-between rounded-lg border p-4"
-              >
-                <div>
-                  <p className="font-medium">{user.name || 'Unnamed User'}</p>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant="secondary">{user.role.replace(/_/g, ' ')}</Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openResetDialog(user)}
-                  >
-                    <KeyRound className="mr-2 h-4 w-4" />
-                    Reset Password
-                  </Button>
-                </div>
+          <>
+            {/* Role filter + search */}
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="All Roles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Roles ({users.length})</SelectItem>
+                  {availableRoles.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role.replace(/_/g, ' ')} (
+                      {users.filter((u) => u.role === role).length})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="relative flex-1 sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by name or email"
+                  className="pl-8"
+                />
               </div>
-            ))}
-          </div>
+            </div>
+
+            {filteredUsers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <p className="text-muted-foreground">No users match your filters</p>
+                <p className="text-sm text-muted-foreground">
+                  Try a different role or search term
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-auto rounded-lg border">
+                <table className="w-full min-w-160 border-collapse text-sm">
+                  <thead className="border-b border-gray-200 bg-muted text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Name</th>
+                      <th className="px-3 py-2 text-left font-medium">Email</th>
+                      <th className="px-3 py-2 text-left font-medium">Role</th>
+                      <th className="px-3 py-2 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id}>
+                        <td className="border-t px-3 py-2 font-medium">
+                          {user.name || 'Unnamed User'}
+                        </td>
+                        <td className="border-t px-3 py-2 text-muted-foreground">
+                          {user.email || '—'}
+                        </td>
+                        <td className="border-t px-3 py-2">
+                          <Badge variant="secondary">
+                            {user.role.replace(/_/g, ' ')}
+                          </Badge>
+                        </td>
+                        <td className="border-t px-3 py-2 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openResetDialog(user)}
+                          >
+                            <KeyRound className="mr-2 h-4 w-4" />
+                            Reset Password
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
 
         {/* Reset Password Dialog */}
