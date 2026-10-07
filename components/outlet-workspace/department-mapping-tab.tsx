@@ -899,6 +899,7 @@ export function DepartmentMappingTab({
                                             ...d,
                                             name: u.name || u.email || "",
                                             email: u.email || d.email,
+                                            whatsapp: u.phone_number || d.whatsapp,
                                             escalation_level_id:
                                               free === undefined
                                                 ? d.escalation_level_id
@@ -1207,6 +1208,7 @@ export function DepartmentMappingTab({
                                       (x) => x.id === val,
                                     );
                                     setMapEmail(u?.email || "");
+                                    setMapWhatsapp(u?.phone_number || "");
                                     // The same user can be mapped again at a
                                     // different level — move to a free one.
                                     const free = pickFreeLevel(
