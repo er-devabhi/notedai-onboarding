@@ -18,7 +18,7 @@ export interface ContactResult {
   name: string
   email: string
   type: 'TO' | 'CC'
-  status: 'success' | 'failed'
+  status: 'success' | 'skipped' | 'failed'
   error?: string
   isNewUser?: boolean
   password?: string
@@ -40,6 +40,7 @@ export interface BulkDeptMappingResponse {
   totalPartial: number
   totalFailed: number
   totalContactsCreated: number
+  totalContactsSkipped: number
   totalContactsFailed: number
 }
 
@@ -79,6 +80,7 @@ export async function bulkUploadDeptMapping(
       totalPartial: 0,
       totalFailed: 1,
       totalContactsCreated: 0,
+      totalContactsSkipped: 0,
       totalContactsFailed: 0,
     }
   }
@@ -86,7 +88,6 @@ export async function bulkUploadDeptMapping(
   for (const record of records) {
     const deptName = record.department.trim()
     const hodName = record.hodName.trim()
-    const hodEmail = record.hodEmail.trim().toLowerCase()
     const mobile = record.mobile.trim()
 
     const rowResult: BulkDeptMappingResultRow = {
@@ -105,16 +106,26 @@ export async function bulkUploadDeptMapping(
       continue
     }
 
-    // ── Validate HOD email ──────────────────────────────────────────────
-    if (!hodEmail) {
+    // ── Validate HOD email(s) — the cell may hold several comma-separated
+    // addresses (e.g. co-heads); each becomes its own TO contact, deduped ──
+    const hodList = [
+      ...new Set(
+        record.hodEmail
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean)
+      ),
+    ]
+    if (hodList.length === 0) {
       rowResult.status = 'failed'
       rowResult.error = "HOD's Email Address is required"
       results.push(rowResult)
       continue
     }
-    if (!emailRegex.test(hodEmail)) {
+    const invalidHodEmails = hodList.filter((e) => !emailRegex.test(e))
+    if (invalidHodEmails.length > 0) {
       rowResult.status = 'failed'
-      rowResult.error = `Invalid HOD email format: "${hodEmail}"`
+      rowResult.error = `Invalid HOD email format: ${invalidHodEmails.join(', ')}`
       results.push(rowResult)
       continue
     }
@@ -127,24 +138,35 @@ export async function bulkUploadDeptMapping(
       continue
     }
 
-    // ── Validate mobile (optional, but must be valid if provided) ─────
-    const whatsappNumbers: string[] = []
-    if (mobile) {
-      if (/^\d{7,15}$/.test(mobile)) {
-        whatsappNumbers.push(mobile)
-      } else {
-        rowResult.status = 'failed'
-        rowResult.error = `Invalid mobile number "${mobile}". Must be 7-15 digits.`
-        results.push(rowResult)
-        continue
-      }
+    // ── Validate mobile (optional; the cell may hold several comma-separated
+    // numbers, all of which map onto the whatsapp_number array field) ─────
+    const mobileNumbers = [
+      ...new Set(
+        mobile
+          .split(',')
+          .map((n) => n.trim())
+          .filter(Boolean)
+      ),
+    ]
+    const invalidMobileNumbers = mobileNumbers.filter((n) => !/^\d{7,15}$/.test(n))
+    if (invalidMobileNumbers.length > 0) {
+      rowResult.status = 'failed'
+      rowResult.error = `Invalid mobile number(s): ${invalidMobileNumbers.join(', ')}. Must be 7-15 digits.`
+      results.push(rowResult)
+      continue
     }
+    const whatsappNumbers = mobileNumbers
 
-    // ── Parse CC emails ─────────────────────────────────────────────────
-    const ccList = record.ccEmails
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean)
+    // ── Parse CC emails (deduped — the same address can be listed twice in
+    // one row's CC column) ───────────────────────────────────────────────
+    const ccList = [
+      ...new Set(
+        record.ccEmails
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean)
+      ),
+    ]
 
     const invalidCcEmails = ccList.filter((e) => !emailRegex.test(e))
     if (invalidCcEmails.length > 0) {
@@ -178,23 +200,27 @@ export async function bulkUploadDeptMapping(
       continue
     }
 
-    // ── Create TO contact (HOD) ────────────────────────────────────────
-    const hodResult = await createContactWithUser(
-      outletDepartment.id,
-      outlet.id,
-      outlet.restaurant_id,
-      {
-        name: hodName,
-        email: hodEmail,
-        type: 'TO' as const,
-        whatsapp_number: whatsappNumbers,
-      }
-    )
-    rowResult.contacts.push(hodResult)
+    // ── Create TO contact(s) (HOD) — the first keeps the provided name and
+    // mobile numbers; any additional HOD emails get a name derived from
+    // their local-part, same as CC contacts do ─────────────────────────
+    for (const [i, hodEmail] of hodList.entries()) {
+      const hodResult = await createContactWithUser(
+        outletDepartment.id,
+        outlet.id,
+        outlet.restaurant_id,
+        {
+          name: i === 0 ? hodName : hodEmail.split('@')[0] || hodEmail,
+          email: hodEmail,
+          type: 'TO' as const,
+          whatsapp_number: i === 0 ? whatsappNumbers : [],
+        }
+      )
+      rowResult.contacts.push(hodResult)
+    }
 
     // ── Create CC contacts ──────────────────────────────────────────────
     for (const ccEmail of ccList) {
-      if (ccEmail === hodEmail) continue
+      if (hodList.includes(ccEmail)) continue
 
       const ccResult = await createContactWithUser(
         outletDepartment.id,
@@ -210,8 +236,11 @@ export async function bulkUploadDeptMapping(
       rowResult.contacts.push(ccResult)
     }
 
-    // ── Determine overall row status ───────────────────────────────────
-    const successCount = rowResult.contacts.filter((c) => c.status === 'success').length
+    // ── Determine overall row status (skipped counts as OK — the contact
+    // is already mapped in this department, nothing went wrong) ──────────
+    const successCount = rowResult.contacts.filter(
+      (c) => c.status === 'success' || c.status === 'skipped'
+    ).length
     const failCount = rowResult.contacts.filter((c) => c.status === 'failed').length
 
     if (failCount === 0) {
@@ -236,6 +265,7 @@ export async function bulkUploadDeptMapping(
     totalPartial: results.filter((r) => r.status === 'partial').length,
     totalFailed: results.filter((r) => r.status === 'failed').length,
     totalContactsCreated: allContacts.filter((c) => c.status === 'success').length,
+    totalContactsSkipped: allContacts.filter((c) => c.status === 'skipped').length,
     totalContactsFailed: allContacts.filter((c) => c.status === 'failed').length,
   }
 }
@@ -254,6 +284,23 @@ async function createContactWithUser(
   const derivedPassword = derivePasswordFromEmail(contact.email)
 
   try {
+    // Same email already mapped in this department (e.g. listed as CC on
+    // several rows, or as both the HOD and a CC elsewhere) — don't create a
+    // duplicate contact row for it.
+    const existing = await prisma.department_config.findFirst({
+      where: { outlet_department_id: departmentId, email: contact.email },
+      select: { id: true },
+    })
+    if (existing) {
+      return {
+        name: contact.name,
+        email: contact.email,
+        type: contact.type,
+        status: 'skipped',
+        error: 'Already mapped to this department',
+      }
+    }
+
     const hashedPassword = await hashPassword(derivedPassword)
     let isNewUser = false
 

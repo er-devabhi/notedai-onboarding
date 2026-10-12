@@ -27,8 +27,8 @@ import {
   Loader2,
   AlertCircle,
   KeyRound,
+  MinusCircle,
 } from "lucide-react";
-import type { BulkDeptMappingResultRow } from "@/lib/actions/bulk-upload-dept-mapping";
 
 const REQUIRED_HEADERS = [
   "Department",
@@ -39,7 +39,7 @@ const REQUIRED_HEADERS = [
 ] as const;
 
 const SAMPLE_CSV = `Department,HOD's Name,Mobile Number,HOD's Email Address,CC mail address
-Ambulance service,Dr Priyadarshini Pal Singh,9810221571,priyadarshini_s@hospital.com,"vandana@hospital.com, pooja@hospital.com"
+Ambulance service,Dr Priyadarshini Pal Singh,"9810221571, 9810221572",priyadarshini_s@hospital.com,"vandana@hospital.com, pooja@hospital.com"
 IP Billing,Ms Preeti Goswami,9818580266,preeti_g@hospital.com,pooja_s@hospital.com
 Radiology,Dr Ankit Jain,,ankit_j@hospital.com,
 `;
@@ -72,6 +72,12 @@ function splitCsvLine(line: string): string[] {
   }
   result.push(current);
   return result;
+}
+
+// Matches a cell that's purely a phone number, or a quoted cell holding
+// several of them ("9810221571, 9810221572") — never an email or name.
+function isNumericGroup(cell: string): boolean {
+  return /^\d+(?:[\s,]+\d+)*$/.test(cell.trim());
 }
 
 interface ParseResult {
@@ -108,9 +114,34 @@ function parseCsv(text: string): ParseResult {
     const cells = splitCsvLine(lines[i]).map((c) => c.trim());
     const department = cells[0] || "";
     const hodName = cells[1] || "";
-    const mobile = cells[2] || "";
-    const hodEmail = cells[3] || "";
-    const ccEmails = cells[4] || "";
+
+    // Mobile Number and CC mail address can each hold several values. When
+    // the source cell was properly quoted, they stay in one cell (cells[2]
+    // and cells[4]) and this is a no-op. When it wasn't quoted, the extra
+    // values spill into their own cells — reconstruct the field boundaries
+    // from content instead of trusting fixed positions, so nothing after
+    // the first overflowing cell gets silently dropped.
+    let idx = 2;
+    const mobileParts: string[] = [];
+    while (idx < cells.length && cells[idx] !== "" && isNumericGroup(cells[idx])) {
+      mobileParts.push(cells[idx]);
+      idx++;
+    }
+    // A mobile cell left intentionally blank still occupies one column.
+    if (mobileParts.length === 0 && idx < cells.length && cells[idx] === "") {
+      idx++;
+    }
+    const mobile = mobileParts.join(", ");
+
+    const hodEmail = cells[idx] || "";
+    idx++;
+
+    const ccEmails = cells
+      .slice(idx)
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .join(", ");
+
     if (!department && !hodName && !hodEmail) continue;
     records.push({
       rowNumber: i + 1,
@@ -257,6 +288,9 @@ export function BulkUploadDeptMappingDialog({
   const totalContactsCreated =
     results?.flatMap((r) => r.contacts).filter((c) => c.status === "success")
       .length || 0;
+  const totalContactsSkipped =
+    results?.flatMap((r) => r.contacts).filter((c) => c.status === "skipped")
+      .length || 0;
   const totalContactsFailed =
     results?.flatMap((r) => r.contacts).filter((c) => c.status === "failed")
       .length || 0;
@@ -280,8 +314,10 @@ export function BulkUploadDeptMappingDialog({
           <DialogDescription>
             Upload a CSV with one row per department. Departments are created
             automatically if they don&apos;t exist. Users are created and mapped
-            in one step. New users&apos; login credentials are shown in the
-            result.
+            in one step. Mobile Number and CC mail address cells can each hold
+            several comma-separated values — quote the cell (e.g. &quot;111,
+            222&quot;) so they stay together. New users&apos; login
+            credentials are shown in the result.
           </DialogDescription>
         </DialogHeader>
 
@@ -388,8 +424,8 @@ export function BulkUploadDeptMappingDialog({
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Contacts: {totalContactsCreated} created, {totalContactsFailed}{" "}
-                failed
+                Contacts: {totalContactsCreated} created, {totalContactsSkipped}{" "}
+                already mapped, {totalContactsFailed} failed
               </p>
 
               {/* Results table */}
@@ -461,6 +497,11 @@ export function BulkUploadDeptMappingDialog({
                                     <span className="font-medium">{c.email}</span>
                                     {c.status === "success" ? (
                                       <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                                    ) : c.status === "skipped" ? (
+                                      <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                        <MinusCircle className="h-3.5 w-3.5 shrink-0" />
+                                        Already mapped
+                                      </span>
                                     ) : (
                                       <span className="text-destructive">
                                         — {c.error}

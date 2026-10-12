@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, KeyRound, Search } from 'lucide-react'
+import { Loader2, KeyRound, Search, Eye, EyeOff } from 'lucide-react'
 import type { User } from '@/types'
 
 interface PasswordTabProps {
@@ -57,6 +57,8 @@ export function PasswordTab({ users }: PasswordTabProps) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [roleFilter, setRoleFilter] = useState<string>('ALL')
   const [search, setSearch] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const availableRoles = Array.from(new Set(users.map((u) => u.role))).sort()
 
@@ -100,6 +102,8 @@ export function PasswordTab({ users }: PasswordTabProps) {
   const openResetDialog = (user: User) => {
     setSelectedUser(user)
     setError(null)
+    setShowPassword(false)
+    setShowConfirmPassword(false)
     form.reset()
   }
 
@@ -226,13 +230,27 @@ export function PasswordTab({ users }: PasswordTabProps) {
                   <Label htmlFor="password">
                     New Password <span className="text-destructive">*</span>
                   </Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    {...form.register('password')}
-                    placeholder="Minimum 6 characters"
-                    autoFocus
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      {...form.register('password')}
+                      placeholder="Minimum 6 characters"
+                      className="pr-10"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                   {form.formState.errors.password && (
                     <p className="text-sm text-destructive">
                       {form.formState.errors.password.message}
@@ -244,12 +262,26 @@ export function PasswordTab({ users }: PasswordTabProps) {
                   <Label htmlFor="confirmPassword">
                     Confirm Password <span className="text-destructive">*</span>
                   </Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    {...form.register('confirmPassword')}
-                    placeholder="Re-enter password"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      {...form.register('confirmPassword')}
+                      placeholder="Re-enter password"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((v) => !v)}
+                      className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                   {form.formState.errors.confirmPassword && (
                     <p className="text-sm text-destructive">
                       {form.formState.errors.confirmPassword.message}
